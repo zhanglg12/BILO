@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from util import *
 
 # the pde and the neural net is combined in one class
@@ -104,7 +105,8 @@ def train_network_init(net, optimizer_net, dataset, opts):
         
         # Output loss values up to three significant digits
         if epoch % opts['print_every'] == 0:
-            print(f'Epoch {epoch}, PDE Loss: {val_loss_res.item():.3g}, Data Loss: {val_loss_data.item():.3g} Total Loss: {val_loss_total.item():.3g} D loss: {val_loss_D.item():.3g} D: {net.D.item():.3g}')
+            # print(f'Epoch {epoch}, PDE Loss: {val_loss_res.item():.3g}, Data Loss: {val_loss_data.item():.3g} Total Loss: {val_loss_total.item():.3g} D loss: {val_loss_D.item():.3g} D: {net.D.item():.3g}')
+            print_statistics(epoch, PDE=val_loss_res.item())
 
         # Termination conditions
         if val_loss_total.item() < opts['tolerance'] or epoch >= opts['max_iter']:
@@ -189,6 +191,128 @@ def train_network_vanilla(net, optimizer_full, dataset, opts):
         epoch += 1  # Increment the epoch counter
 
 
+class lossCollection:
+    # loss, parameter, and optimizer
+    def __init__(self, net, dataset, param, optimizer, opts):
 
+        self.opts = opts
+        self.net = net
+        self.dataset = dataset
+        self.optimizer = optimizer(param)
+        self.param = param
 
+        # intermediate results for residual loss
+        self.res = None
+        self.res_D = None
+        self.u_pred = None
+
+        # collection of all loss functions
+        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss}
         
+        self.loss_weight = opts['weights']
+        
+        # collect keys with positive weights
+        self.loss_active = []
+        for k in self.loss_weight.keys():
+            if self.loss_weight[k] is not None and self.loss_weight[k] > 0:
+                self.loss_active.append(k)
+
+    
+        self.loss_comp = {} # component of each loss
+        self.loss_val = None # total loss for backprop
+
+
+    def computeResidual(self):
+        self.res, self.res_D, self.u_pred = self.net.residual(self.dataset['x_train_res'], self.net.D)
+
+    def resloss(self):
+        self.computeResidual()
+        val_loss_res = mse(self.res)
+        return val_loss_res
+    
+    def resgradloss(self):
+        return mse(self.res_D)
+    
+    def dataloss(self):
+        # a little bit less efficient, u_pred is already computed in resloss
+        self.u_pred = self.net(self.dataset['x_train_res'])
+        return mse(self.u_pred, self.dataset['u_data'])
+    
+    def getloss(self):
+        # for each active loss, compute the loss and multiply with the weight
+        losses = {}
+        weighted_sum = 0
+        for key in self.loss_active:
+            losses[key] = self.loss_weight[key] * self.loss_dict[key]()
+            weighted_sum += losses[key]
+        
+        self.loss_comp = losses
+        self.loss_val = weighted_sum
+
+    def step(self):
+        self.optimizer.zero_grad()
+        # 1 step of gradient descent
+        grads = torch.autograd.grad(self.loss_val, self.param, create_graph=True, allow_unused=True)
+        for param, grad in zip(self.param, grads):
+            param.grad = grad
+        self.optimizer.step()
+
+
+# def train_network(net, lossCollections, opts):
+    
+#     epoch = 0
+#     u_data_init = net.u_init(dataset['x_train_res']) # initial value of u to help training
+#     while True:
+#         # Zero the gradients
+        
+#         total_loss = 0
+#         loss_comp = {}
+
+#         for lossObj in lossCollections:
+#             lossObj.getloss()
+#             lossObj.step()
+
+#             total_loss += lossObj.loss_val
+#             loss_comp.update(lossObj.loss_comp)
+
+#         loss_comp['total'] = total_loss
+        
+#         if epoch % opts['print_every'] == 0:
+#             print_statistics(epoch, **loss_comp, D=net.D.item())
+            
+#         # Termination conditions
+#         if loss_comp['total'].item() < opts['tolerance'] or epoch >= opts['max_iter']:
+#             break  # Exit the loop if loss is below tolerance or maximum iterations reached
+        
+#         epoch += 1  # Increment the epoch counter
+
+
+# set up simple test
+if __name__ == "__main__":
+    device = set_device('cpu')
+
+    # basic version
+    # net = DensePoisson(2,6,basic=True).to(device)
+    
+    net = DensePoisson(2,6).to(device)
+
+    Dexact = 2.0
+    dataset = {}
+    dataset['x_train_res'] = torch.linspace(0, 1, 20).view(-1, 1).to(device)
+    dataset['x_train_res'].requires_grad_(True)
+    dataset['u_data'] = net.u_exact(dataset['x_train_res'], Dexact)
+
+    lossopt = {'weights':{'res':1.0,'data':1.0}}
+
+    # train basic version
+    # lossObj = lossCollection(net, dataset, list(net.parameters()), optim.Adam, lossopt)
+
+    # train inverse problem
+    loss_pde_opts = {'weights':{'res':1.0,'resgrad':1.0}}
+    loss_pde = lossCollection(net, dataset, net.param_net, optim.Adam, loss_pde_opts)
+
+    loss_data_opts = {'weights':{'data':1.0}}
+    loss_data = lossCollection(net, dataset, net.param_pde, optim.Adam, loss_data_opts)
+    
+    trainopt = {'max_iter': 1000, 'print_every':10, 'tolerance':1e-2}
+    train_network(net, [loss_pde, loss_data], trainopt)

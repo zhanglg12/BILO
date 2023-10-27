@@ -36,7 +36,13 @@ def print_statistics(epoch, **losses):
 
 
 # Function to set device priority: CUDA > MPS > CPU
-def set_device():
+def set_device(name = None):
+
+    if name is not None:
+        device = torch.device(name)
+        print(f'Using device: {device}')
+        return device
+
     # Check for CUDA availability
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -78,3 +84,15 @@ def generate_grf(x, a, l):
     grf_torch = torch.tensor(grf_numpy, dtype=torch.float32).view(x.shape)
 
     return grf_torch
+
+# https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
+# turn a nested dict to a single dict
+def flatten(d, parent_key=''):
+    items = []
+    for k, v in d.items():
+        new_key = k
+        if isinstance(v, dict):
+            items.extend(flatten(v, new_key).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
