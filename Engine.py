@@ -9,25 +9,30 @@ from util import *
 from DensePoisson import *
 
 import mlflow
-
+from MlflowHelper import MlflowHelper
 
 
 
 class Engine:
-    def __init__(self, opts) -> None:
+    def __init__(self, opts=None, run_id = None) -> None:
 
-        self.opts = opts
+        self.device = set_device()
 
-        self.net = DensePoisson(**(self.opts['nn_opts'])).to(device)
+        if run_id is not None:
+            self.load_from_id(run_id)
+        else:
+            self.opts = opts    
+            self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
         
         self.dataset = {}
-
         self.lossCollection = {}
     
     def setup_data(self):
         xtmp = torch.linspace(0, 1, 20).view(-1, 1)
-        self.dataset['x_train_res'] = xtmp.to(device)
+        self.dataset['x_train_res'] = xtmp.to(self.device)
         self.dataset['x_train_res'].requires_grad_(True)
+
+        self.dataset['x_test_res'] = torch.linspace(0, 1, 100).view(-1, 1).to(self.device)
 
         # generate data, might be noisy
         if self.opts['traintype']=="init":
@@ -39,7 +44,11 @@ class Engine:
 
             if self.opts['noise_opts']['use_noise']:
                 self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
-                self.dataset['u_data'] = self.dataset['u_data'] + self.dataset['noise'].to(device)
+                self.dataset['u_data'] = self.dataset['u_data'] + self.dataset['noise'].to(self.device)
+    
+    def make_prediction(self):
+        self.dataset['u_test_res'] = self.net(self.dataset['x_test_res'])
+        
 
     def setup_lossCollection(self):
 
@@ -71,9 +80,12 @@ class Engine:
 
         print(json.dumps(self.opts, indent=2,sort_keys=True))
         
-        mlflow.start_run(run_name=self.opts['runname'])
+        # creat experiment if not exist
+        mlflow.set_experiment(self.opts['experiment_name'])
+        # start mlflow run
+        mlflow.start_run(run_name=self.opts['run_name'])
 
-        mlflow.set_tracking_uri('')
+        # mlflow.set_tracking_uri('')
         tracking_uri = mlflow.get_tracking_uri()
         print(f"Current tracking uri: {tracking_uri}")
 
@@ -103,6 +115,7 @@ class Engine:
                 print_statistics(epoch, **loss_comp, D=self.net.D.item())
                 # log metric using mlflow
                 mlflow.log_metrics(loss_comp, step=epoch)
+                mlflow.log_metrics({'D':self.net.D.item()}, step=epoch)
 
             # Termination conditions
             # Exit the loop if loss is below tolerance or maximum iterations reached
@@ -112,6 +125,18 @@ class Engine:
             epoch += 1  # Increment the epoch counter
         
         self.save()
+
+    def load_from_id(self, run_id):
+        helper = MlflowHelper()        
+        artifact_paths = helper.get_artifact_paths(run_id)
+        self.opts = read_json(artifact_paths['options.json'])
+
+        self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
+        self.net.load_state_dict(torch.load(artifact_paths['net.pth']))
+        print(f'net loaded from {artifact_paths["net.pth"]}')
+
+        
+
 
     
     def load(self):
@@ -169,10 +194,6 @@ class Engine:
         print(f"Artifact uri: {artifact_uri}")
         
         
-        
-
-
-
 
 
 if __name__ == "__main__":
@@ -182,11 +203,15 @@ if __name__ == "__main__":
     optobj = Options()
     optobj.parse_args(*sys.argv[1:])
 
-    device = set_device(optobj.opts['device'])
+    
     eng = Engine(optobj.opts)
 
     eng.setup_data()
     eng.setup_lossCollection()
     eng.run()
 
-        
+    # save command to file
+    f = open("commands.txt", "a")
+    f.write(' '.join(sys.argv))
+    f.write('\n')
+    f.close()

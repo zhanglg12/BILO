@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from util import *
+from config import *
 
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
@@ -257,34 +258,6 @@ class lossCollection:
             param.grad = grad
         self.optimizer.step()
 
-
-# def train_network(net, lossCollections, opts):
-    
-#     epoch = 0
-#     u_data_init = net.u_init(dataset['x_train_res']) # initial value of u to help training
-#     while True:
-#         # Zero the gradients
-        
-#         total_loss = 0
-#         loss_comp = {}
-
-#         for lossObj in lossCollections:
-#             lossObj.getloss()
-#             lossObj.step()
-
-#             total_loss += lossObj.loss_val
-#             loss_comp.update(lossObj.loss_comp)
-
-#         loss_comp['total'] = total_loss
-        
-#         if epoch % opts['print_every'] == 0:
-#             print_statistics(epoch, **loss_comp, D=net.D.item())
-            
-#         # Termination conditions
-#         if loss_comp['total'].item() < opts['tolerance'] or epoch >= opts['max_iter']:
-#             break  # Exit the loop if loss is below tolerance or maximum iterations reached
-        
-#         epoch += 1  # Increment the epoch counter
 
 
 # set up simple test

@@ -4,7 +4,8 @@ import ast
 
 
 default_opts = {
-    'runname': 'tmp',
+    'run_name': 'tmp',
+    'experiment_name': 'dev',
     'restore': '',
     'traintype': 'basic',
     'smallrun': False, 
@@ -21,7 +22,7 @@ default_opts = {
         'max_iter': 100000,
         'lr': 0.001,
         'tolerance': 1e-3,
-        'print_every': 100,
+        'print_every': 20,
     },
     'Dexact': 2.0,
     'noise_opts':{

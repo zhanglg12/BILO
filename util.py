@@ -17,6 +17,10 @@ class MyEncoder(json.JSONEncoder):
 def savedict(dict, fpath):
     json.dump( dict, open( fpath, 'w' ), indent=4, cls=MyEncoder, sort_keys=True)
 
+def read_json(path):
+    with open(path, 'r') as f:
+        return json.load(f)
+        
 def mse(x, y = 0):
     return torch.mean((x - y)**2)
 
