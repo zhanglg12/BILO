@@ -10,7 +10,7 @@ from DensePoisson import *
 
 import mlflow
 from MlflowHelper import MlflowHelper
-
+from DataSet import DataSet
 
 
 class Engine:
@@ -28,26 +28,29 @@ class Engine:
         self.lossCollection = {}
     
     def setup_data(self):
-        xtmp = torch.linspace(0, 1, 20).view(-1, 1)
-        self.dataset['x_train_res'] = xtmp.to(self.device)
-        self.dataset['x_train_res'].requires_grad_(True)
+        dsopt = self.otps['dataset_opts']
+        self.dataset = DataSet()
+        xtmp = torch.linspace(0, 1, ds['N_res_train'] ).view(-1, 1)
+        
+        self.dataset['x_res_train'] = xtmp.to(self.device)
+        self.dataset['x_res_train'].requires_grad_(True)
 
-        self.dataset['x_test_res'] = torch.linspace(0, 1, 100).view(-1, 1).to(self.device)
+        self.dataset['x_res_test'] = torch.linspace(0, 1, ds['N_res_test']).view(-1, 1).to(self.device)
 
         # generate data, might be noisy
         if self.opts['traintype']=="init":
             # for init, use D_init, no noise
-            self.dataset['u_data'] = self.net.u_exact(self.dataset['x_train_res'], self.net.init_D)
+            self.dataset['u_res_train'] = self.net.u_exact(self.dataset['x_res_train'], self.net.init_D)
         else:
             # for basci/inverse, use D_exact
-            self.dataset['u_data'] = self.net.u_exact(self.dataset['x_train_res'], self.opts['Dexact'])
+            self.dataset['u_res_train'] = self.net.u_exact(self.dataset['x_res_train'], self.opts['Dexact'])
 
             if self.opts['noise_opts']['use_noise']:
                 self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
-                self.dataset['u_data'] = self.dataset['u_data'] + self.dataset['noise'].to(self.device)
+                self.dataset['u_res_train'] = self.dataset['u_res_train'] + self.dataset['noise'].to(self.device)
     
     def make_prediction(self):
-        self.dataset['u_test_res'] = self.net(self.dataset['x_test_res'])
+        self.dataset['u_res_test'] = self.net(self.dataset['x_res_test'])
         
 
     def setup_lossCollection(self):
@@ -192,6 +195,8 @@ class Engine:
         mlflow.log_artifact("options.json")
         artifact_uri = mlflow.get_artifact_uri()
         print(f"Artifact uri: {artifact_uri}")
+        
+        self.dataset.save(artifact_uri)
         
         
 

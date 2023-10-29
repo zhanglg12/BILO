@@ -80,17 +80,17 @@ class DensePoisson(nn.Module):
 def train_network_init(net, optimizer_net, dataset, opts):
     
     epoch = 0
-    u_data_init = net.u_init(dataset['x_train_res']) # initial value of u to help training
+    u_res_init = net.u_init(dataset['x_res_train']) # initial value of u to help training
     while True:
         # Zero the gradients
         optimizer_net.zero_grad()
         
-        res, res_D, u_pred = net.residual(dataset['x_train_res'], net.D)
+        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
         # Forward pass
         val_loss_res = mse(res)
         val_loss_D = mse(res_D)
 
-        val_loss_data = mse(u_pred, u_data_init )
+        val_loss_data = mse(u_pred, u_res_init )
 
         
         val_loss_total = val_loss_res + val_loss_data + val_loss_D
@@ -126,10 +126,10 @@ def train_network_inverse(net, optimizer_net, optimizer_D, dataset, opts):
         optimizer_D.zero_grad()
         
         # Forward pass
-        res, res_D, u_pred = net.residual(dataset['x_train_res'], net.D)
+        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
         # Forward pass
         val_loss_res = mse(res)
-        val_loss_data = mse(u_pred, dataset['u_data'])
+        val_loss_data = mse(u_pred, dataset['u_res_train'])
         val_loss_D = mse(res_D)
         
         val_loss_total = val_loss_res + val_loss_data + val_loss_D
@@ -162,16 +162,16 @@ def train_network_inverse(net, optimizer_net, optimizer_D, dataset, opts):
 def train_network_vanilla(net, optimizer_full, dataset, opts):
     # vanilla version of inverse problem
     epoch = 0
-    u_data_init = net.u_init(dataset['x_train_res']) # initial value of u to help training
+    u_res_init = net.u_init(dataset['x_res_train']) # initial value of u to help training
     while True:
         # Zero the gradients
         optimizer_full.zero_grad()
         
-        res, res_D, u_pred = net.residual(dataset['x_train_res'], net.D)
+        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
         # Forward pass
         val_loss_res = mse(res)
 
-        val_loss_data = mse(u_pred, dataset['u_data'] )
+        val_loss_data = mse(u_pred, dataset['u_res_train'] )
 
         val_loss_total = val_loss_res + val_loss_data
         
@@ -224,7 +224,7 @@ class lossCollection:
 
 
     def computeResidual(self):
-        self.res, self.res_D, self.u_pred = self.net.residual(self.dataset['x_train_res'], self.net.D)
+        self.res, self.res_D, self.u_pred = self.net.residual(self.dataset['x_res_train'], self.net.D)
 
     def resloss(self):
         self.computeResidual()
@@ -236,8 +236,8 @@ class lossCollection:
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
-        self.u_pred = self.net(self.dataset['x_train_res'])
-        return mse(self.u_pred, self.dataset['u_data'])
+        self.u_pred = self.net(self.dataset['x_res_train'])
+        return mse(self.u_pred, self.dataset['u_res_train'])
     
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight
@@ -271,9 +271,9 @@ if __name__ == "__main__":
 
     Dexact = 2.0
     dataset = {}
-    dataset['x_train_res'] = torch.linspace(0, 1, 20).view(-1, 1).to(device)
-    dataset['x_train_res'].requires_grad_(True)
-    dataset['u_data'] = net.u_exact(dataset['x_train_res'], Dexact)
+    dataset['x_res_train'] = torch.linspace(0, 1, 20).view(-1, 1).to(device)
+    dataset['x_res_train'].requires_grad_(True)
+    dataset['u_res_train'] = net.u_exact(dataset['x_res_train'], Dexact)
 
     lossopt = {'weights':{'res':1.0,'data':1.0}}
 

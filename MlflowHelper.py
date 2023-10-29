@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+import sys
 from util import *
 import mlflow
 
@@ -5,11 +7,35 @@ class MlflowHelper:
     # helper class for mlflow
 
     def __init__(self) -> None:
-
-        
         self.client = mlflow.tracking.MlflowClient()
         
     
+    def get_run(self, **kwargs):
+        # get run id from experiment name and run name
+        # kwargs: experiment_name, run_name, run_id
+        if 'run_id' in kwargs:
+            run_id = kwargs['run_id']
+        else:
+            experiment_name = kwargs['experiment_name']
+            run_name = kwargs['run_name']
+            run_id = self.get_id_by_name(experiment_name, run_name)
+        return run_id
+    
+    def get_id_by_name(self, experiment_name, run_name):
+        # get unique run id from experiment name and run name
+        experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
+        
+        # get run id from run name and experiment id
+        runs = mlflow.search_runs(experiment_ids=[experiment_id], filter_string=f"run_name='{run_name}'")['run_id']
+        if len(runs) == 0:
+            raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_name}'")
+        elif len(runs) > 1:
+            raise ValueError(f"Multiple runs found with name '{run_name}' in experiment '{experiment_name}'")
+        else:
+            run_id = runs[0]
+
+        return run_id
+
     def get_artifact_paths(self, run_id):
         # get artifact full paths
         
@@ -34,4 +60,10 @@ class MlflowHelper:
             metrics_history[key] = values
         metrics_history['steps'] = steps
 
-        
+
+if __name__ == "__main__":
+    # test
+    helper = MlflowHelper()
+    kwargs = dict(arg.split('=') for arg in sys.argv[1:])
+    id = helper.get_run(**kwargs)
+    print(id)

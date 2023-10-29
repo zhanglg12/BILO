@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+import sys
 import torch
 import torch.nn as nn
 from config import *
 from util import *
 from DensePoisson import *
+from MlflowHelper import MlflowHelper
 
 from matplotlib import pyplot as plt
 
@@ -22,7 +25,7 @@ class PlotHelper:
     
     def plot_variation(self, Ds):
 
-        x_test = self.dataset['x_test_res']
+        x_test = self.dataset['x_res_test']
 
         # color order
         c = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -60,15 +63,15 @@ class PlotHelper:
         fprint(f'figure saved to {fpath}')
 
     def plot_prediction(self):
-        x_test = self.dataset['x_test_res']
+        x_test = self.dataset['x_res_test']
 
         u_test = self.net(x_test)
         u_init_test = self.net.u_init(x_test)
         u_exact_test = self.net.u_exact(x_test, self.opts['Dexact'])
 
-        x_train_res = self.dataset['x_train_res'].detach()
-        u_pred = self.net(x_train_res).detach()
-        u_data = self.dataset['u_data'].detach()
+        x_res_train = self.dataset['x_res_train'].detach()
+        u_pred = self.net(x_res_train).detach()
+        u_res = self.dataset['u_res_train'].detach()
 
         # visualize the results
         fig, ax = plt.subplots()
@@ -78,8 +81,8 @@ class PlotHelper:
         ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().numpy(), label='exact')
         
         # scatter plot of training data
-        ax.plot(x_train_res.cpu().numpy(), u_pred.cpu().numpy(), 'o', label='train-pred')
-        ax.plot(x_train_res.cpu().numpy(), u_data.cpu().numpy(), 'o', label='train-data')
+        ax.plot(x_res_train.cpu().numpy(), u_pred.cpu().numpy(), 'o', label='train-pred')
+        ax.plot(x_res_train.cpu().numpy(), u_res.cpu().numpy(), 'o', label='train-data')
 
 
         ax.legend(loc="upper right")
@@ -89,4 +92,27 @@ class PlotHelper:
             self.save('fig_pred.png', fig)
 
         return fig, ax
+
+
+if __name__ == "__main__":
+    # visualize the results for single run
+    exp_name = sys.argv[1]
+    run_name = sys.argv[2]
+
+    helper = MlflowHelper()
+    run_id = helper.get_id_by_name(exp_name, run_name)
+
+    artifacts = helper.get_artifact_paths(run_id)
+
+    opts = read_json(artifacts['options.json'])
+
+    nn = DensePoisson(**opts['nn_opts'])
+    nn.load_state_dict(torch.load(artifacts['net.pth']))
+
+    dataset = read_json(artifacts['dataset.mat'])
+
+    ph = PlotHelper(nn, dataset, yessave=True, save_dir='./')
     
+    ph.plot_prediction()
+    ph.plot_variation([0.5, 1.0, 1.5])
+

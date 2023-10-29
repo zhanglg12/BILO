@@ -49,7 +49,7 @@ shift $((OPTIND -1))
 
 # current directory
 cdir=${PWD%/} #need trailing / for rsync
-remotedir=${remotedir%/}  # Remove trailing slash if exists
+# remotedir=${remotedir%/}  # Remove trailing slash if exists
 
 
 # Determine relative path
