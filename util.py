@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import json
-np.random.seed(7)
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -23,6 +22,10 @@ def read_json(path):
         
 def mse(x, y = 0):
     return torch.mean((x - y)**2)
+
+def print_dict(d):
+    print(json.dumps(d, indent=4),sort_keys=True)
+
 
 
 def print_statistics(epoch, **losses):
@@ -65,29 +68,6 @@ def set_device(name = None):
 
 
 
-def generate_grf(x, a, l):
-    # Ensure x is a torch tensor, if not, convert it to a torch tensor
-    if not isinstance(x, torch.Tensor):
-        x = torch.tensor(x)
-
-    # Convert x to a 1D numpy array for processing with numpy
-    x_numpy = x.view(-1).numpy()
-
-    # Meshgrid for covariance matrix calculation
-    x1, x2 = np.meshgrid(x_numpy, x_numpy, indexing='ij')
-
-    if abs(l) > 1e-6:
-        # grf with length scale l
-        K = a * np.exp(-0.5 * ((x1 - x2)**2) / (l**2))
-        grf_numpy = np.random.multivariate_normal(mean=np.zeros_like(x_numpy), cov=K)
-    else:
-        # iid Gaussian
-        grf_numpy = np.random.normal(loc=0.0, scale=a, size=x_numpy.shape)
-
-    # Convert grf_numpy back to a torch tensor, reshaping to match the original shape of x
-    grf_torch = torch.tensor(grf_numpy, dtype=torch.float32).view(x.shape)
-
-    return grf_torch
 
 # https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
 # turn a nested dict to a single dict

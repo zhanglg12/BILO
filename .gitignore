@@ -1,2 +1,4 @@
 mlruns/
 *.pth
+__pycache__/
+

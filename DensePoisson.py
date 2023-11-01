@@ -4,22 +4,33 @@ import torch.optim as optim
 from util import *
 from config import *
 
+
+
+
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
 
 class DensePoisson(nn.Module):
-    def __init__(self, depth, width, use_resnet=False, basic=False, init_D=1.0, p = 1):
+    def __init__(self, depth, width, use_resnet=False, basic=False, init_D=1.0, p = 1, useFourierFeatures=False):
         super().__init__()
+        
         
         self.depth = depth
         self.width = width
         self.use_resnet = use_resnet
         self.init_D = init_D
         self.basic = basic
+        self.useFourierFeatures = useFourierFeatures
         
-        self.p = p  # determine class of functions, larger p -> more oscillations
+        self.p = p  # determine class of problem, larger p -> more oscillations
 
-        self.input_layer = nn.Linear(1, width)
+        if self.useFourierFeatures:
+            self.fflayer = nn.Linear(1, width)
+            self.fflayer.requires_grad = False
+            self.input_layer = nn.Linear(width, width)
+        else:
+            self.input_layer = nn.Linear(1, width)
+
         self.hidden_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
         self.output_layer = nn.Linear(width, 1)
         
@@ -30,16 +41,31 @@ class DensePoisson(nn.Module):
 
         # for basic version, D is not part of the network
         if self.basic == False:
-            self.fcD = nn.Linear(1, width)
+            self.fcD = nn.Linear(1, width, bias=False)
+            self.fcD.requires_grad = False
 
 
         # separate parameters for the neural net and the PDE parameter
-        self.param_net = [param for param in self.parameters() if param is not self.D]
+        # self.param_net = [param for param in self.parameters() if (param is not self.D) and (param is not self.fcD)]
+
+        self.param_net = all_params = list(self.input_layer.parameters()) +\
+                            [param for layer in self.hidden_layers for param in layer.parameters()] +\
+                            list(self.output_layer.parameters())
+
         self.param_pde = [self.D]
         
 
     def forward(self, x):
-        fbc = torch.sin(torch.pi * x)
+        
+        # fbc = torch.sin(torch.pi * x) # transformation of nn to impose boundary condition
+        fbc = x * (1 - x) 
+
+
+        if self.useFourierFeatures:
+            x = torch.sin(2 * torch.pi * self.fflayer(x))
+
+        x = torch.sigmoid(self.input_layer(x))
+   
         if self.basic == False:
             x = torch.sigmoid(self.input_layer(x) + self.fcD(self.D))
         else:
@@ -51,20 +77,24 @@ class DensePoisson(nn.Module):
                 hidden_output += self.residual_layers[i](x)  # ResNet connection
             x = hidden_output
         
-        u = self.output_layer(x) * fbc
+        u = (self.output_layer(x)) * fbc
         return u
     
     
     # define residual
     def residual(self, x, D):
         u_pred = self.forward(x)
+        
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True,retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
+
+        u_D = torch.autograd.grad(u_pred, self.D, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
+
         res = D * u_xx - self.f(x)
 
         # differntiate res w.r.t. D
         res_D = torch.autograd.grad(res, self.D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
-        return res, res_D, u_pred
+        return res, res_D, u_pred, u_D
     
     def f(self, x):
         return - (torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
@@ -206,9 +236,10 @@ class lossCollection:
         self.res = None
         self.res_D = None
         self.u_pred = None
+        self.u_D = None
 
         # collection of all loss functions
-        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss}
+        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
         
         self.loss_weight = opts['weights']
         
@@ -224,7 +255,9 @@ class lossCollection:
 
 
     def computeResidual(self):
-        self.res, self.res_D, self.u_pred = self.net.residual(self.dataset['x_res_train'], self.net.D)
+        self.res, self.res_D, self.u_pred, self.u_D = self.net.residual(self.dataset['x_res_train'], self.net.D)
+    
+
 
     def resloss(self):
         self.computeResidual()
@@ -233,6 +266,9 @@ class lossCollection:
     
     def resgradloss(self):
         return mse(self.res_D)
+    
+    def paramgradloss(self):
+        return torch.exp(-mse(self.u_D))
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss

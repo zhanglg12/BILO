@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 from scipy.io import loadmat, savemat
 import numpy as np
@@ -7,7 +8,7 @@ class DataSet(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def readmat(self, file_path):
+    def readmat(self, file_path, as_torch=True):
         # load data from .mat file, skip meta data
         data = loadmat(file_path, mat_dtype=True)
 
@@ -23,6 +24,10 @@ class DataSet(dict):
                     value = value.item()
                 
                 self[key] = value
+        
+        # otherwise it is a numpy array
+        if as_torch:
+            self.to_torch()
     
     def printsummary(self):
         '''print data set
@@ -38,6 +43,7 @@ class DataSet(dict):
         '''save data set to .mat file
         '''
         # save data set to .mat file
+        self.to_cpu()
         savemat(file_path, self)
     
     def to_torch(self):
@@ -45,6 +51,18 @@ class DataSet(dict):
         '''
         for key, value in self.items():
             self[key] = torch.tensor(value)
+    
+    def to_cpu(self):
+        '''convert tensor to cpu
+        '''
+        for key, value in self.items():
+            self[key] = value.cpu().detach()
+    
+    def to_device(self, device):
+        '''convert tensor to cpu
+        '''
+        for key, value in self.items():
+            self[key] = value.to(device)
     
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+# start mlflow server
+mlflow server --host 0.0.0.0 --port 5000
+
+# view process at port 5000
+lsof -n -i :5000
+
+# kill port
+# https://stackoverflow.com/questions/16756624/gunicorn-connection-in-use-0-0-0-0-5000
+fuser -k 5000/tcp

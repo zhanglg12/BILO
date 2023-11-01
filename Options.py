@@ -10,19 +10,32 @@ default_opts = {
     'traintype': 'basic',
     'smallrun': False, 
     'device': 'cuda',
+    'seed': 0,
     'nn_opts': {
         'depth': 3,
         'width': 64,
         'use_resnet': False,
         'basic': False,
         'init_D': 1.0,
-        'p': 1
+        'p': 1,
+        'useFourierFeatures':False,
+    },
+    'dataset_opts': {
+        'N_res_train': 100,
+        'N_res_test': 100,
     },
     'train_opts': {
+        'update_param_every': 10,
         'max_iter': 100000,
         'lr': 0.001,
         'tolerance': 1e-3,
         'print_every': 20,
+        'patience': 1000,
+        'delta_loss':0,
+        'delta_params':1e-4,
+        'monitor_loss':True,
+        'monitor_params':True,
+        'burnin':1000,
     },
     'Dexact': 2.0,
     'noise_opts':{
@@ -33,7 +46,8 @@ default_opts = {
     'weights': {
         'res': 1.0,
         'resgrad': 1.0,
-        'data': 1.0
+        'data': 1.0,
+        'paramgrad': None,
     }
 }
 

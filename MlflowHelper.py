@@ -37,12 +37,18 @@ class MlflowHelper:
         return run_id
 
     def get_artifact_paths(self, run_id):
-        # get artifact full paths
         
+        # get artifact dir
+        run = mlflow.get_run(run_id)
+        artifact_dir = run.info.artifact_uri[7:] 
+
+        # get all artifact paths
         artifacts = self.client.list_artifacts(run_id)
         paths = [artifact.path for artifact in artifacts]
         # get dictioinary of name - full path 
         paths = {path.split('/')[-1]: self.client.download_artifacts(run_id, path) for path in paths}
+        paths['artifacts_dir'] = artifact_dir
+        
         
         return paths
     
@@ -62,8 +68,12 @@ class MlflowHelper:
 
 
 if __name__ == "__main__":
-    # test
+    # test if can get run_id corretly
+    # python MlflowHelper.py experiment_name=experiment_1 run_name=run_1
+    # python MlflowHelper.py run_id=1a2b3c4d5e6f7g8h9i0j
+    
     helper = MlflowHelper()
     kwargs = dict(arg.split('=') for arg in sys.argv[1:])
     id = helper.get_run(**kwargs)
     print(id)
+    print_dict(helper.get_artifact_paths(id))
