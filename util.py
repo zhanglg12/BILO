@@ -24,7 +24,7 @@ def mse(x, y = 0):
     return torch.mean((x - y)**2)
 
 def print_dict(d):
-    print(json.dumps(d, indent=4),sort_keys=True)
+    print(json.dumps(d, indent=4,sort_keys=True))
 
 
 

@@ -21,16 +21,16 @@ class MlflowHelper:
             run_id = self.get_id_by_name(experiment_name, run_name)
         return run_id
     
-    def get_id_by_name(self, experiment_name, run_name):
+    def get_id_by_name(self, experiment_names, run_name):
         # get unique run id from experiment name and run name
-        experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
+        # experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
         
         # get run id from run name and experiment id
-        runs = mlflow.search_runs(experiment_ids=[experiment_id], filter_string=f"run_name='{run_name}'")['run_id']
+        runs = mlflow.search_runs(experiment_names=experiment_names, filter_string=f"run_name LIKE '{run_name}%'")['run_id']
         if len(runs) == 0:
-            raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_name}'")
-        elif len(runs) > 1:
-            raise ValueError(f"Multiple runs found with name '{run_name}' in experiment '{experiment_name}'")
+            raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_names}'")
+        # elif len(runs) > 1:
+        #     raise ValueError(f"Multiple runs found with name '{run_name}' in experiment '{experiment_name}'")
         else:
             run_id = runs[0]
 

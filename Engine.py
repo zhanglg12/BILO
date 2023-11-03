@@ -91,6 +91,10 @@ class Engine:
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
         
+        elif self.opts['traintype'] == 'forward':
+            loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
+            self.lossCollection['basic'] = lossCollection(self.net, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+        
         elif self.opts['traintype'] == 'init':
             # use all 3 losses
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],
@@ -174,7 +178,8 @@ class Engine:
         except KeyboardInterrupt:
             print('Interrupted')
             pass
-
+        
+        mlflow.end_run()
         self.save()
 
     def load_from_id(self, run_id):

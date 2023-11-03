@@ -25,12 +25,14 @@ class DensePoisson(nn.Module):
         self.p = p  # determine class of problem, larger p -> more oscillations
 
         if self.useFourierFeatures:
+            print('Using Fourier Features')
             self.fflayer = nn.Linear(1, width)
             self.fflayer.requires_grad = False
             self.input_layer = nn.Linear(width, width)
         else:
             self.input_layer = nn.Linear(1, width)
 
+        # depth = input + hidden + output
         self.hidden_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
         self.output_layer = nn.Linear(width, 1)
         
@@ -87,7 +89,6 @@ class DensePoisson(nn.Module):
         
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True,retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-
         u_D = torch.autograd.grad(u_pred, self.D, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
 
         res = D * u_xx - self.f(x)
@@ -105,121 +106,6 @@ class DensePoisson(nn.Module):
     def u_init(self, x):
         return torch.sin(torch.pi * self.p * x) / self.init_D
 
-
-
-def train_network_init(net, optimizer_net, dataset, opts):
-    
-    epoch = 0
-    u_res_init = net.u_init(dataset['x_res_train']) # initial value of u to help training
-    while True:
-        # Zero the gradients
-        optimizer_net.zero_grad()
-        
-        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
-        # Forward pass
-        val_loss_res = mse(res)
-        val_loss_D = mse(res_D)
-
-        val_loss_data = mse(u_pred, u_res_init )
-
-        
-        val_loss_total = val_loss_res + val_loss_data + val_loss_D
-        
-        # Backward pass
-        grads_net = torch.autograd.grad(val_loss_total, net.param_net, create_graph=True, allow_unused=True)
-        
-        for param, grad in zip(net.param_net, grads_net):
-            param.grad = grad
-        
-        # Step the optimizers
-        optimizer_net.step()
-        
-        # Output loss values up to three significant digits
-        if epoch % opts['print_every'] == 0:
-            # print(f'Epoch {epoch}, PDE Loss: {val_loss_res.item():.3g}, Data Loss: {val_loss_data.item():.3g} Total Loss: {val_loss_total.item():.3g} D loss: {val_loss_D.item():.3g} D: {net.D.item():.3g}')
-            print_statistics(epoch, PDE=val_loss_res.item())
-
-        # Termination conditions
-        if val_loss_total.item() < opts['tolerance'] or epoch >= opts['max_iter']:
-            break  # Exit the loop if loss is below tolerance or maximum iterations reached
-        
-        epoch += 1  # Increment the epoch counter
-
-
-def train_network_inverse(net, optimizer_net, optimizer_D, dataset, opts):
-    
-    # Training loop
-    epoch = 0
-    while True:  # Change to a while loop to allow for early termination
-        # Zero the gradients
-        optimizer_net.zero_grad()
-        optimizer_D.zero_grad()
-        
-        # Forward pass
-        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
-        # Forward pass
-        val_loss_res = mse(res)
-        val_loss_data = mse(u_pred, dataset['u_res_train'])
-        val_loss_D = mse(res_D)
-        
-        val_loss_total = val_loss_res + val_loss_data + val_loss_D
-
-        # Backward pass
-        grads_net = torch.autograd.grad(val_loss_res + val_loss_D, net.param_net, create_graph=True, allow_unused=True)
-        grads_pdeparam = torch.autograd.grad(val_loss_data, net.param_pde, create_graph=True, allow_unused=True)
-        
-        for param, grad in zip(net.param_net, grads_net):
-            param.grad = grad
-        
-        for param, grad in zip(net.param_pde, grads_pdeparam):
-            param.grad = grad
-
-        # Step the optimizers
-        optimizer_net.step()
-        optimizer_D.step()
-
-        # Output loss values up to three significant digits
-        if epoch % opts['print_every'] == 0:
-            print_statistics(epoch, PDE=val_loss_res.item(), Data=val_loss_data.item(), Dloss=val_loss_D.item(), Total=val_loss_total.item(), D=net.D.item())
-
-        # Termination conditions
-        if val_loss_total.item() < opts['tolerance'] or epoch >= opts['max_iter']:
-            break  # Exit the loop if loss is below tolerance or maximum iterations reached
-
-        epoch += 1  # Increment the epoch counter
-
-
-def train_network_vanilla(net, optimizer_full, dataset, opts):
-    # vanilla version of inverse problem
-    epoch = 0
-    u_res_init = net.u_init(dataset['x_res_train']) # initial value of u to help training
-    while True:
-        # Zero the gradients
-        optimizer_full.zero_grad()
-        
-        res, res_D, u_pred = net.residual(dataset['x_res_train'], net.D)
-        # Forward pass
-        val_loss_res = mse(res)
-
-        val_loss_data = mse(u_pred, dataset['u_res_train'] )
-
-        val_loss_total = val_loss_res + val_loss_data
-        
-        # Backward pass
-        val_loss_total.backward(retain_graph=True)
-        
-        # Step the optimizers
-        optimizer_full.step()
-        
-        # Output loss values up to three significant digits
-        if epoch % opts['print_every'] == 0:
-            print_statistics(epoch, PDE=val_loss_res.item(), Data=val_loss_data.item(), Total=val_loss_total.item(), D=net.D.item())
-
-        # Termination conditions
-        if val_loss_total.item() < opts['tolerance'] or epoch >= opts['max_iter']:
-            break  # Exit the loop if loss is below tolerance or maximum iterations reached
-        
-        epoch += 1  # Increment the epoch counter
 
 
 class lossCollection:
