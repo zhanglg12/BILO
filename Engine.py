@@ -57,6 +57,9 @@ class Engine:
         self.lossCollection = {}
         self.mlrun = None
         self.artifact_dir = None
+
+    def setup_problem(self):
+        self.pde = create_pde_problem(**(self.opts['pde_opts']))
     
     def setup_data(self):
         dsopt = self.opts['dataset_opts']
@@ -69,16 +72,16 @@ class Engine:
         self.dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1).to(self.device)
 
         # generate data, might be noisy
-        if self.opts['traintype']=="init":
+        if self.opts['traintype']=="init" or self.opts['traintype']=="forward":
             # for init, use D_init, no noise
-            self.dataset['u_res_train'] = self.net.u_exact(self.dataset['x_res_train'], self.net.init_D)
+            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.net.init_D)
         else:
             # for basci/inverse, use D_exact
-            self.dataset['u_res_train'] = self.net.u_exact(self.dataset['x_res_train'], self.opts['Dexact'])
+            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.net.init_D)
 
-            if self.opts['noise_opts']['use_noise']:
-                self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
-                self.dataset['u_res_train'] = self.dataset['u_res_train'] + self.dataset['noise'].to(self.device)
+        if self.opts['noise_opts']['use_noise']:
+            self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
+            self.dataset['u_res_train'] = self.dataset['u_res_train'] + self.dataset['noise'].to(self.device)
     
     def make_prediction(self):
         self.dataset['u_res_test'] = self.net(self.dataset['x_res_test'])
@@ -89,11 +92,11 @@ class Engine:
         if self.opts['traintype'] == 'basic':
             # no resgrad
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
-            self.lossCollection['basic'] = lossCollection(self.net, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
+            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
         
         elif self.opts['traintype'] == 'forward':
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
-            self.lossCollection['basic'] = lossCollection(self.net, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
         
         elif self.opts['traintype'] == 'init':
             # use all 3 losses
@@ -101,14 +104,14 @@ class Engine:
             'resgrad':self.opts['weights']['resgrad'],
             'data':self.opts['weights']['data'],
             'paramgrad':self.opts['weights']['paramgrad']}}
-            self.lossCollection['pde'] = lossCollection(self.net, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
 
         elif self.opts['traintype'] == 'inverse':
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'resgrad':self.opts['weights']['resgrad'],'data':self.opts['weights']['data']}}
-            self.lossCollection['pde'] = lossCollection(self.net, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
 
             loss_data_opts = {'weights':{'data':self.opts['weights']['data']}}
-            self.lossCollection['data'] = lossCollection(self.net, self.dataset, self.net.param_pde, optim.Adam, loss_data_opts)
+            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, optim.Adam, loss_data_opts)
         else:
             raise ValueError(f'train type {self.opts["traintype"]} not supported')
 
@@ -178,8 +181,6 @@ class Engine:
         except KeyboardInterrupt:
             print('Interrupted')
             pass
-        
-        mlflow.end_run()
         self.save()
 
     def load_from_id(self, run_id):
@@ -319,6 +320,21 @@ class EarlyStopping:
 
         return False
 
+def load_model(exp_name=None, run_name=None, run_id=None):
+    helper = MlflowHelper()        
+    if run_id is None:
+        run_id = helper.get_id_by_name(exp_name, run_name)
+
+    artifact_paths = helper.get_artifact_paths(run_id)
+    opts = read_json(artifact_paths['options.json'])
+    
+    # reconstruct net from options and load weight
+    net = DensePoisson(**(opts['nn_opts']))
+    net.load_state_dict(torch.load(artifact_paths['net.pth']))
+    print(f'net loaded from {artifact_paths["net.pth"]}')
+    return net, opts
+
+
 if __name__ == "__main__":
     
     
@@ -332,6 +348,7 @@ if __name__ == "__main__":
 
     eng = Engine(optobj.opts)
 
+    eng.setup_problem()
     eng.setup_data()
     eng.setup_lossCollection()
     
@@ -341,7 +358,7 @@ if __name__ == "__main__":
 
     eng.dataset.to_device(eng.device)
 
-    ph = PlotHelper(eng.net, eng.dataset, yessave=True, save_dir=eng.artifact_dir, Dexact=eng.opts['Dexact'])
+    ph = PlotHelper(eng.net, eng.pde, eng.dataset, yessave=True, save_dir=eng.artifact_dir, exact_D=eng.opts['pde_opts']['exact_D'])
     ph.plot_prediction()
     ph.device = eng.device
 

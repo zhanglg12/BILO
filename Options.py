@@ -12,13 +12,17 @@ default_opts = {
     'smallrun': False, 
     'device': 'cuda',
     'seed': 0,
+    'pde_opts': {
+        'problem': 'PoissonProblem',
+        'p': 1,
+        'exact_D': 1.0,
+    },
     'nn_opts': {
         'depth': 4,
         'width': 64,
         'use_resnet': False,
         'basic': False,
         'init_D': 1.0,
-        'p': 1,
         'useFourierFeatures':True,
     },
     'dataset_opts': {
@@ -38,7 +42,6 @@ default_opts = {
         'monitor_params':True,
         'burnin':1000,
     },
-    'Dexact': 2.0,
     'noise_opts':{
         'use_noise': False,
         'variance': 0.01,

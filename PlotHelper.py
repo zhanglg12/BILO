@@ -12,9 +12,10 @@ from DataSet import DataSet
 from matplotlib import pyplot as plt
 
 class PlotHelper:
-    def __init__(self, net, dataset, **kwargs) -> None:
+    def __init__(self, net, pde, dataset, **kwargs) -> None:
 
         self.net = net
+        self.pde = pde
         self.dataset = dataset
         self.device = DEVICE
 
@@ -34,7 +35,7 @@ class PlotHelper:
         c = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
         u_test = self.net(x_test)
-        u_init_test = self.net.u_init(x_test)
+        u_init_test = self.pde.u_exact(x_test, self.net.init_D)
 
         fig, ax = plt.subplots()
 
@@ -48,7 +49,7 @@ class PlotHelper:
             u_test = self.net(x_test)
             ax.plot(x_test.cpu().numpy(), u_test.cpu().detach().numpy(), label='NN D = {}'.format(D),color=c[i])
 
-            u_exact_test = self.net.u_exact(x_test, D)
+            u_exact_test = self.pde.u_exact(x_test, D)
             ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().numpy(), label='exact D = {}'.format(D),color=c[i],linestyle='--')
         # set net.D
         ax.legend(loc="upper right")
@@ -69,11 +70,11 @@ class PlotHelper:
         x_test = self.dataset['x_res_test']
 
         u_test = self.net(x_test)
-        u_init_test = self.net.u_init(x_test)
-        u_exact_test = self.net.u_exact(x_test, self.opts['Dexact'])
+        u_init_test = self.pde.u_exact(x_test, self.net.init_D)
+        u_exact_test = self.pde.u_exact(x_test, self.pde.exact_D)
 
         # excat u with predicted D, for comparison
-        u_exact_pred_D_test = self.net.u_exact(x_test, self.net.D.item())
+        u_exact_pred_D_test = self.pde.u_exact(x_test, self.net.D.item())
 
         x_res_train = self.dataset['x_res_train'].detach()
         u_pred = self.net(x_res_train).detach()
@@ -123,7 +124,7 @@ if __name__ == "__main__":
     dataset = DataSet()
     dataset.readmat(atf_dict['dataset.mat'])
 
-    ph = PlotHelper(nn, dataset, yessave=True, save_dir=atf_dict['artifacts_dir'],Dexact=opts['Dexact'])
+    ph = PlotHelper(nn, dataset, yessave=True, save_dir=atf_dict['artifacts_dir'],exact_D=opts['pde_opts']['exact_D'])
     
     ph.plot_prediction()
     D = nn.D.item()

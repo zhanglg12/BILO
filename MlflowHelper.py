@@ -26,6 +26,11 @@ class MlflowHelper:
         # experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
         
         # get run id from run name and experiment id
+
+        # if experiment_names is a string, convert to list
+        if isinstance(experiment_names, str):
+            experiment_names = [experiment_names]
+
         runs = mlflow.search_runs(experiment_names=experiment_names, filter_string=f"run_name LIKE '{run_name}%'")['run_id']
         if len(runs) == 0:
             raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_names}'")
