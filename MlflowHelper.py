@@ -31,11 +31,14 @@ class MlflowHelper:
         if isinstance(experiment_names, str):
             experiment_names = [experiment_names]
 
-        runs = mlflow.search_runs(experiment_names=experiment_names, filter_string=f"run_name LIKE '{run_name}%'")['run_id']
+        runs = mlflow.search_runs(experiment_names=experiment_names, filter_string=f"run_name LIKE '{run_name}'")['run_id']
         if len(runs) == 0:
             raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_names}'")
-        # elif len(runs) > 1:
-        #     raise ValueError(f"Multiple runs found with name '{run_name}' in experiment '{experiment_name}'")
+        elif len(runs) > 1:
+            # raise warning
+            print(f"Warning: Multiple runs found with name '{run_name}' in experiment '{experiment_names}'. Using the first one.")
+            run_id = runs[0]
+
         else:
             run_id = runs[0]
 

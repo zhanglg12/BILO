@@ -65,8 +65,6 @@ class DensePoisson(nn.Module):
 
         if self.useFourierFeatures:
             x = torch.sin(2 * torch.pi * self.fflayer(x))
-
-        x = torch.sigmoid(self.input_layer(x))
    
         if self.basic == False:
             x = torch.sigmoid(self.input_layer(x) + self.fcD(self.D))
