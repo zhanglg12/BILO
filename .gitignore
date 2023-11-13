@@ -1,4 +1,6 @@
 mlruns/
 *.pth
+*.png
+fig*/
 __pycache__/
 

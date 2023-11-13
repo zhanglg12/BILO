@@ -345,6 +345,8 @@ if __name__ == "__main__":
     # set seed
     np.random.seed(optobj.opts['seed'])
     torch.manual_seed(optobj.opts['seed'])
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(optobj.opts['seed'])
 
     eng = Engine(optobj.opts)
 
