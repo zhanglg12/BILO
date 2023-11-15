@@ -12,6 +12,11 @@ default_opts = {
     'smallrun': False, 
     'device': 'cuda',
     'seed': 0,
+    'transfer_opts':{
+        'transfer_method': 'lora', # lora, freeze
+        'nlayer_train': 1, # number of layers to train
+        'rank': 4,
+    },
     'pde_opts': {
         'problem': 'PoissonProblem',
         'p': 1,

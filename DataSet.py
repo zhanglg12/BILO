@@ -1,10 +1,15 @@
 #!/usr/bin/env python
+
 import sys
 from scipy.io import loadmat, savemat
 import numpy as np
 import torch
 
 class DataSet(dict):
+    '''data set class
+    interface between .mat file and python
+    access data set as dictionary
+    '''
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -61,8 +66,11 @@ class DataSet(dict):
     def to_device(self, device):
         '''convert tensor to cpu
         '''
+        print(f'convert to {device}')
         for key, value in self.items():
             self[key] = value.to(device)
+            # print(f'{key}:\t{self[key].device}')
+            
     
 
 if __name__ == "__main__":

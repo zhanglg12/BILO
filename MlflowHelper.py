@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import os
 from util import *
 import mlflow
 
@@ -57,9 +58,14 @@ class MlflowHelper:
         paths = {path.split('/')[-1]: self.client.download_artifacts(run_id, path) for path in paths}
         paths['artifacts_dir'] = artifact_dir
         
-        
         return paths
-    
+
+    def gen_artifact_path(self, run_id, fname):
+
+        run = mlflow.get_run(run_id)
+        artifact_dir = run.info.artifact_uri[7:] 
+        return os.path.join(artifact_dir, fname)
+
     def get_metric_history(self, run_id):
         # get all metric from run
         metrics = self.client.get_run(run_id).data.metrics
@@ -73,6 +79,27 @@ class MlflowHelper:
             
             metrics_history[key] = values
         metrics_history['steps'] = steps
+        return metrics_history, metrics
+
+
+def get_artifact_dir():
+    # Get the artifact URI
+    artifact_uri = mlflow.get_artifact_uri()
+
+    # Remove 'file://' prefix
+    if artifact_uri.startswith("file://"):
+        artifact_dir = artifact_uri.replace("file://", "", 1)
+
+    return artifact_dir
+
+def get_artifact_path(filename):
+
+    artifact_dir = get_artifact_dir()
+    # Append the filename
+    file_path = os.path.join(artifact_dir, filename)
+
+    return file_path
+
 
 
 if __name__ == "__main__":

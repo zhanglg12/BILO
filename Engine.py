@@ -13,34 +13,13 @@ from DensePoisson import *
 import mlflow
 from MlflowHelper import MlflowHelper
 from DataSet import DataSet
+from Problems import *
+from lossCollection import *
 
-from PlotHelper import PlotHelper
+from PlotHelper import *
 
 from torchinfo import summary
 
-def generate_grf(x, a, l):
-    # Ensure x is a torch tensor, if not, convert it to a torch tensor
-    if not isinstance(x, torch.Tensor):
-        x = torch.tensor(x)
-
-    # Convert x to a 1D numpy array for processing with numpy
-    x_numpy = x.view(-1).numpy()
-
-    # Meshgrid for covariance matrix calculation
-    x1, x2 = np.meshgrid(x_numpy, x_numpy, indexing='ij')
-
-    if abs(l) > 1e-6:
-        # grf with length scale l
-        K = a * np.exp(-0.5 * ((x1 - x2)**2) / (l**2))
-        grf_numpy = np.random.multivariate_normal(mean=np.zeros_like(x_numpy), cov=K)
-    else:
-        # iid Gaussian
-        grf_numpy = np.random.normal(loc=0.0, scale=a, size=x_numpy.shape)
-
-    # Convert grf_numpy back to a torch tensor, reshaping to match the original shape of x
-    grf_torch = torch.tensor(grf_numpy, dtype=torch.float32).view(x.shape)
-
-    return grf_torch
 
 class Engine:
     def __init__(self, opts=None, run_id = None) -> None:
@@ -90,11 +69,13 @@ class Engine:
     def setup_lossCollection(self):
 
         if self.opts['traintype'] == 'basic':
-            # no resgrad
+            # basic method of solving inverse problem, optimize weight and parameter
+            # no resgrad, residual loss and data loss only, 
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
         
         elif self.opts['traintype'] == 'forward':
+            # fast forward solve using resdual, or together with data loss
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
         
@@ -114,6 +95,8 @@ class Engine:
             self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, optim.Adam, loss_data_opts)
         else:
             raise ValueError(f'train type {self.opts["traintype"]} not supported')
+        
+
 
         return 
 
@@ -261,80 +244,6 @@ class Engine:
 
 
         
-        
-class EarlyStopping:
-    def __init__(self,  **kwargs):
-        self.tolerance = kwargs.get('tolerance', 1e-4)
-        self.max_iter = kwargs.get('max_iter', 10000)
-        self.patience = kwargs.get('patience', 100)
-        self.delta_loss = kwargs.get('delta_loss', 0)
-        self.delta_params = kwargs.get('delta_params', 0.001)
-        self.burnin = kwargs.get('burnin',1000 )
-        self.monitor_loss = kwargs.get('monitor_loss', True)
-        self.monitor_params = kwargs.get('monitor_params', True)
-        self.best_loss = None
-        self.prev_params = None
-        self.counter_param = 0
-        self.counter_loss = 0
-
-    def __call__(self, loss, params, epoch):
-        if epoch >= self.max_iter:
-            print('Stop due to max iteration')
-            return True
-        
-        if loss < self.tolerance:
-            print('Stop due to loss tolerance')
-            return True
-         
-        if epoch < self.burnin:
-            return False
-
-        if self.monitor_loss:
-            if self.best_loss is None:
-                self.best_loss = loss
-            elif loss > self.best_loss - self.delta_loss:
-                self.counter_loss += 1
-                if self.counter_loss >= self.patience:
-                    print(f'Stop due to loss patience, best loss {self.best_loss}')
-                    return True
-            else:
-                self.best_loss = loss
-                self.counter_loss = 0
-
-        # disabled for now, The difference is just leanring rate.
-        # if self.monitor_params:
-        #     if self.prev_params is None:
-        #         self.prev_params =  {k:v.clone() for k,v in params.items()}
-        #     else:
-        #         param_diff = sum(torch.norm(params[k] - self.prev_params[k]) for k in params.keys())
-        #         print(param_diff)
-        #         self.prev_params = {k:v.clone() for k,v in params.items()}
-        #         if param_diff < self.delta_params:
-        #             self.counter_param += 1
-        #             if self.counter_param >= self.patience:
-        #                 print('Stop due to parameter convergence')
-        #                 return True
-        #         else:
-        #             self.counter_param = 0
-            
-
-        return False
-
-def load_model(exp_name=None, run_name=None, run_id=None):
-    helper = MlflowHelper()        
-    if run_id is None:
-        run_id = helper.get_id_by_name(exp_name, run_name)
-
-    artifact_paths = helper.get_artifact_paths(run_id)
-    opts = read_json(artifact_paths['options.json'])
-    
-    # reconstruct net from options and load weight
-    net = DensePoisson(**(opts['nn_opts']))
-    net.load_state_dict(torch.load(artifact_paths['net.pth']))
-    print(f'net loaded from {artifact_paths["net.pth"]}')
-    return net, opts
-
-
 if __name__ == "__main__":
     
     
@@ -360,12 +269,11 @@ if __name__ == "__main__":
 
     eng.dataset.to_device(eng.device)
 
-    ph = PlotHelper(eng.net, eng.pde, eng.dataset, yessave=True, save_dir=eng.artifact_dir, exact_D=eng.opts['pde_opts']['exact_D'])
-    ph.plot_prediction()
-    ph.device = eng.device
-
+    ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.artifact_dir)
+    ph.plot_prediction(eng.net)
+    
     D = eng.net.D.item()
-    ph.plot_variation([D-0.1, D, D+0.1])
+    ph.plot_variation(eng.net, [D-0.1, D, D+0.1])
 
     # save command to file
     f = open("commands.txt", "a")

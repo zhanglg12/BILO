@@ -3,13 +3,10 @@ import torch.nn as nn
 import torch.optim as optim
 from util import *
 from config import *
-
-
-
+from MlflowHelper import MlflowHelper
 
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
-
 class DensePoisson(nn.Module):
     def __init__(self, depth, width, use_resnet=False, basic=False, init_D=1.0, p = 1, useFourierFeatures=False):
         super().__init__()
@@ -50,7 +47,7 @@ class DensePoisson(nn.Module):
         # separate parameters for the neural net and the PDE parameter
         # self.param_net = [param for param in self.parameters() if (param is not self.D) and (param is not self.fcD)]
 
-        self.param_net = all_params = list(self.input_layer.parameters()) +\
+        self.param_net = list(self.input_layer.parameters()) +\
                             [param for layer in self.hidden_layers for param in layer.parameters()] +\
                             list(self.output_layer.parameters())
 
@@ -88,163 +85,44 @@ class DensePoisson(nn.Module):
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
     
-    # # define residual
-    # def residual(self, x, D):
-    #     u_pred = self.forward(x)
-        
-    #     u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-    #     u_xx = torch.autograd.grad(u_x, x, create_graph=True,retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-    #     u_D = torch.autograd.grad(u_pred, self.D, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-
-    #     res = D * u_xx - self.f(x)
-
-    #     # differntiate res w.r.t. D
-    #     res_D = torch.autograd.grad(res, self.D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
-    #     return res, res_D, u_pred, u_D
+    def freeze_layers_except(self, n):
+        '''
+        Freeze model, only the last n layers are trainable
+        '''
+        self.param_net = []
+        total = len(list(self.children()))
+        print(f'total {total} layers, freeze {total-n} layers')
+        for i, layer in enumerate(self.children()):
+            if i < total - n:
+                for param in layer.parameters():
+                    param.requires_grad = False
+            else:
+                for param in layer.parameters():
+                    param.requires_grad = True
+                self.param_net += list(layer.parameters())
     
-    # def f(self, x):
-    #     return - (torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
+    def print_named_module(self):
+        for name, layer in self.named_modules():
+            print(name, layer)
+
+
+
+def load_model(exp_name=None, run_name=None, run_id=None):
+    """ 
+    Load model from mlflow run id or name
+    """
+    helper = MlflowHelper()        
+    if run_id is None:
+        run_id = helper.get_id_by_name(exp_name, run_name)
+
+    artifact_paths = helper.get_artifact_paths(run_id)
+    opts = read_json(artifact_paths['options.json'])
     
-    # def u_exact(self, x, D):
-    #     return torch.sin(torch.pi * self.p * x) / D
-
-    # def u_init(self, x):
-    #     return torch.sin(torch.pi * self.p * x) / self.init_D
-
-
-class PoissonProblem():
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.p = kwargs['p']
-        self.exact_D = kwargs['exact_D']
-
-    def residual(self, nn, x, D):
-        u_pred = nn.forward(x)
-        u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-        u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = D * u_xx - self.f(x)
-        # res_D = torch.autograd.grad(res, D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
-        return res, u_pred
-
-    def f(self, x):
-        return - (torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
-
-    def u_exact(self, x, D):
-        return torch.sin(torch.pi * self.p * x) / D
-
-
-class PoissonProblem2():
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.p = kwargs['p']
-        self.exact_D = kwargs['exact_D']
-
-    def residual(self, nn, x, D):
-        u_pred = nn.forward(x)
-        u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-        u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = u_xx + u_x - 1.0
-        return res, u_pred
-
-    def f(self, x):
-        return 0.0
-
-    def u_exact(self, x, D):
-        e = torch.exp(torch.tensor(1.0))
-        return (e - torch.exp(1.0-x) + x - e * x) / (1.0 - e)
-
-def create_pde_problem(**kwargs):
-    problem_type = kwargs['problem']
-    if problem_type == 'PoissonProblem':
-        return PoissonProblem(**kwargs)
-    elif problem_type == 'PoissonProblem2':
-        return PoissonProblem2(**kwargs)
-    else:
-        raise ValueError(f'Unknown problem type: {problem_type}')
-
-class lossCollection:
-    # loss, parameter, and optimizer
-    def __init__(self, net, pde, dataset, param, optimizer, opts):
-
-        self.opts = opts
-        self.net = net
-        self.pde = pde
-        self.dataset = dataset
-        self.optimizer = optimizer(param)
-        self.param = param
-
-        # intermediate results for residual loss
-        self.res = None
-        self.res_D = None
-        self.u_pred = None
-        self.u_D = None
-
-        # collection of all loss functions
-        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
-        
-        self.loss_weight = opts['weights']
-        
-        # collect keys with positive weights
-        self.loss_active = []
-        for k in self.loss_weight.keys():
-            if self.loss_weight[k] is not None and self.loss_weight[k] > 0:
-                self.loss_active.append(k)
-
-    
-        self.loss_comp = {} # component of each loss
-        self.loss_val = None # total loss for backprop
-
-
-    def computeResidual(self):
-        # self.res, self.res_D, self.u_pred, self.u_D = self.net.residual(self.dataset['x_res_train'], self.net.D)
-        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.D)
-        return self.res, self.u_pred
-
-    def computeResidualGrad(self):
-        # compute gradient of residual w.r.t. parameter
-        self.res_D = torch.autograd.grad(self.res, self.net.D, create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
-        return self.res_D
-        
-
-    def resloss(self):
-        self.computeResidual()
-        val_loss_res = mse(self.res)
-        return val_loss_res
-    
-    def resgradloss(self):
-        # compute gradient of residual w.r.t. parameter
-        self.computeResidualGrad()
-        return mse(self.res_D)
-    
-    def paramgradloss(self):
-        # derivative of u w.r.t. D
-        # penalty term to keep away from 0
-        return torch.exp(-mse(self.u_D))
-    
-    def dataloss(self):
-        # a little bit less efficient, u_pred is already computed in resloss
-        self.u_pred = self.net(self.dataset['x_res_train'])
-        return mse(self.u_pred, self.dataset['u_res_train'])
-    
-    def getloss(self):
-        # for each active loss, compute the loss and multiply with the weight
-        losses = {}
-        weighted_sum = 0
-        for key in self.loss_active:
-            losses[key] = self.loss_weight[key] * self.loss_dict[key]()
-            weighted_sum += losses[key]
-        
-        self.loss_comp = losses
-        self.loss_val = weighted_sum
-
-    def step(self):
-        self.optimizer.zero_grad()
-        # 1 step of gradient descent
-        grads = torch.autograd.grad(self.loss_val, self.param, create_graph=True, allow_unused=True)
-        for param, grad in zip(self.param, grads):
-            param.grad = grad
-        self.optimizer.step()
-
+    # reconstruct net from options and load weight
+    net = DensePoisson(**(opts['nn_opts']))
+    net.load_state_dict(torch.load(artifact_paths['net.pth']))
+    print(f'net loaded from {artifact_paths["net.pth"]}')
+    return net, opts
 
 
 # set up simple test
@@ -273,6 +151,3 @@ if __name__ == "__main__":
 
     loss_data_opts = {'weights':{'data':1.0}}
     loss_data = lossCollection(net, dataset, net.param_pde, optim.Adam, loss_data_opts)
-    
-    trainopt = {'max_iter': 1000, 'print_every':10, 'tolerance':1e-2}
-    train_network(net, [loss_pde, loss_data], trainopt)
