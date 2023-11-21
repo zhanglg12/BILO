@@ -25,6 +25,7 @@ class PoissonProblem():
 
 
 class PoissonProblem2():
+    # u_xx + u_x = 1
     def __init__(self, **kwargs):
         super().__init__()
         self.p = kwargs['p']

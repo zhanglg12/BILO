@@ -20,6 +20,8 @@ from lossCollection import *
 from Problems import *
 from PlotHelper import PlotHelper
 
+from torchinfo import summary
+
 
 optobj = Options()
 optobj.parse_args(*sys.argv[1:])
@@ -31,11 +33,13 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(optobj.opts['seed'])
 
 # load model
-exp_name = 'loraseed'
-name = 'p1D1_s0'
-model, opt = load_model(exp_name, name)
+model, opt = load_model(name_str=optobj.opts['restore'])
 
+optobj.opts['nn_opts'].update(opt['nn_opts'])
+
+# do not use this function, it will add lora to all layers
 # add_lora(model)
+
 # this skip fflayer and fcD
 if optobj.opts['transfer_opts']['transfer_method'] == 'lora':
     rk = optobj.opts['transfer_opts']['rank']
@@ -44,6 +48,7 @@ if optobj.opts['transfer_opts']['transfer_method'] == 'lora':
             "weight": partial(LoRAParametrization.from_linear, rank=rk),
         },
     }
+    model.freeze_layers_except(0)
     add_lora_by_name(model, ['input_layer','hidden_layers','output_layer'],lora_config = lora_config)
 
     param_to_train = list(get_lora_params(model))
@@ -55,13 +60,7 @@ elif optobj.opts['transfer_opts']['transfer_method'] == 'freeze':
     param_to_train = model.param_net
 
 # setup new problem
-pde_opts = {
-        'problem': 'PoissonProblem',
-        'p': 2,
-        'exact_D': 1.0,
-        'init_D': 1.0,
-    }
-pde = create_pde_problem(**pde_opts)
+pde = create_pde_problem(**optobj.opts['pde_opts'])
 dataset = setup_dataset(pde,  optobj.opts['noise_opts'], optobj.opts['dataset_opts'])
 loss_pde_opts = {'weights':{'res':optobj.opts['weights']['res'],'data':optobj.opts['weights']['data']}}
 lc = {}
@@ -71,10 +70,12 @@ lc['forward'] = lossCollection(model, pde, dataset, param_to_train, optim.Adam, 
 
 dataset['x_res_train'].requires_grad = True
 
-
 estop = EarlyStopping(**optobj.opts['train_opts'])
 
 trainer = Trainer(optobj.opts, model, pde, dataset, lc)
+
+summary(model,verbose=2,col_names=["num_params", "trainable"])
+
 trainer.setup_mlflow()
 trainer.train()
 

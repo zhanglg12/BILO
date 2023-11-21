@@ -141,7 +141,7 @@ def output_svd(m1, m2, layer_name):
     return s1, s2, s_diff
 
 
-def plot_svd(s1, s2, s_diff, name1, name2, layer_name):
+def plot_svd(s1, s2, s_diff, name1, name2, namediff):
     # sve plot, 
     # s1, s2, s_diff are the svd of the weight and svd of the difference
     # name1, name2 are the names of the two models
@@ -150,10 +150,8 @@ def plot_svd(s1, s2, s_diff, name1, name2, layer_name):
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(s1, label=name1)
     ax.plot(s2, label=name2)
-    ax.plot(s_diff, label='diff')
+    ax.plot(s_diff, label=namediff)
     ax.set_yscale('log')
-    ax.legend()
-
     return fig, ax
     
 

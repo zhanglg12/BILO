@@ -122,7 +122,6 @@ class EarlyStopping:
         self.delta_params = kwargs.get('delta_params', 0.001)
         self.burnin = kwargs.get('burnin',1000 )
         self.monitor_loss = kwargs.get('monitor_loss', True)
-        self.monitor_params = kwargs.get('monitor_params', True)
         self.best_loss = None
         self.prev_params = None
         self.counter_param = 0
@@ -152,21 +151,6 @@ class EarlyStopping:
                 self.best_loss = loss
                 self.counter_loss = 0
 
-        # disabled for now, The difference is just leanring rate.
-        # if self.monitor_params:
-        #     if self.prev_params is None:
-        #         self.prev_params =  {k:v.clone() for k,v in params.items()}
-        #     else:
-        #         param_diff = sum(torch.norm(params[k] - self.prev_params[k]) for k in params.keys())
-        #         print(param_diff)
-        #         self.prev_params = {k:v.clone() for k,v in params.items()}
-        #         if param_diff < self.delta_params:
-        #             self.counter_param += 1
-        #             if self.counter_param >= self.patience:
-        #                 print('Stop due to parameter convergence')
-        #                 return True
-        #         else:
-        #             self.counter_param = 0
             
 
         return False
