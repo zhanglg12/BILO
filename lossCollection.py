@@ -118,35 +118,37 @@ class EarlyStopping:
         self.tolerance = kwargs.get('tolerance', 1e-4)
         self.max_iter = kwargs.get('max_iter', 10000)
         self.patience = kwargs.get('patience', 100)
-        self.burnin = kwargs.get('burnin', 1000)
+        self.delta_loss = kwargs.get('delta_loss', 0)
+        self.burnin = kwargs.get('burnin',1000 )
         self.monitor_loss = kwargs.get('monitor_loss', True)
-        self.reltol = kwargs.get('reltol', 1e-2)
-        
-        self.loss_history = []
+        self.best_loss = None
+        self.counter_param = 0
+        self.counter_loss = 0
 
-    
     def __call__(self, loss, params, epoch):
         if epoch >= self.max_iter:
             print('Stop due to max iteration')
             return True
         
         if loss < self.tolerance:
-            print(f'Stop due to loss {loss} < {self.tolerance}')
+            print('Stop due to loss {loss} < {self.tolerance}')
             return True
          
         if epoch < self.burnin:
             return False
 
-        self.loss_history.append(loss)
-        if len(self.loss_history) > self.patience:
-            self.loss_history.pop(0)
-
         if self.monitor_loss:
-
-            if len(self.loss_history) == self.patience:
-                avg_rel_change = sum(abs((self.loss_history[i] - self.loss_history[i-1]) / self.loss_history[i-1]) for i in range(1, self.patience)) / (self.patience - 1)
-                if avg_rel_change < self.reltol:
-                    print(f'Stop due to average abs rel change in loss in {self.patience} steps  {avg_rel_change} < {self.reltol}')
+            if self.best_loss is None:
+                self.best_loss = loss
+            elif loss > self.best_loss - self.delta_loss:
+                self.counter_loss += 1
+                if self.counter_loss >= self.patience:
+                    print(f'Stop due to loss patience for {self.counter_loss} steps, best loss {self.best_loss}')
                     return True
+            else:
+                self.best_loss = loss
+                self.counter_loss = 0
+
+            
 
         return False
