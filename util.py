@@ -37,7 +37,7 @@ def print_statistics(epoch, **losses):
         **losses (dict): A dictionary where the keys are descriptive names of the loss values,
                          and the values are the loss values themselves.
     """
-    loss_strs = ', '.join(f'{name}: {value:.3g}' for name, value in losses.items())
+    loss_strs = ', '.join(f'{name}: {value:.3e}' for name, value in losses.items())
     print(f'Epoch {epoch}, {loss_strs}')
 
 

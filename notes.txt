@@ -11,3 +11,4 @@ fuser -k 5000/tcp
 
 # create experiments
 mlflow experiments create -n exp_name
+

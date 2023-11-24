@@ -37,8 +37,8 @@ class MlflowHelper:
             raise ValueError(f"No run found with name '{run_name}' in experiment '{experiment_names}'")
         elif len(runs) > 1:
             # raise warning
-            print(f"Warning: Multiple runs found with name '{run_name}' in experiment '{experiment_names}'. Using the first one.")
             run_id = runs[0]
+            print(f"Warning: Multiple runs found with name '{run_name}' in experiment '{experiment_names}'. Using the first one ({run_id}).")
 
         else:
             run_id = runs[0]
@@ -83,7 +83,7 @@ class MlflowHelper:
 
 
 def get_artifact_dir():
-    # Get the artifact URI
+    # Get the current artifact URI
     artifact_uri = mlflow.get_artifact_uri()
 
     # Remove 'file://' prefix
@@ -93,7 +93,7 @@ def get_artifact_dir():
     return artifact_dir
 
 def get_artifact_path(filename):
-
+    # generate path for current run
     artifact_dir = get_artifact_dir()
     # Append the filename
     file_path = os.path.join(artifact_dir, filename)

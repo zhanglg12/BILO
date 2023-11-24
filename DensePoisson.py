@@ -107,9 +107,9 @@ class DensePoisson(nn.Module):
 
 
 
-def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
+def load_artifact(exp_name=None, run_name=None, run_id=None, name_str=None):
     """ 
-    Load model from mlflow run id or name
+    Load options and artifact paths from mlflow run id or name
     """
     if name_str is not None:
         try:
@@ -123,6 +123,14 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 
     artifact_paths = helper.get_artifact_paths(run_id)
     opts = read_json(artifact_paths['options.json'])
+    return opts, artifact_paths
+
+
+def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
+    """ 
+    easy load model from mlflow run id or name
+    """
+    opts, artifact_paths = load_artifact(exp_name, run_name, run_id, name_str)
     
     # reconstruct net from options and load weight
     net = DensePoisson(**(opts['nn_opts']))

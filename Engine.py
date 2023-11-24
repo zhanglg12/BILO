@@ -22,20 +22,24 @@ from torchinfo import summary
 
 
 class Engine:
-    def __init__(self, opts=None, run_id = None) -> None:
+    def __init__(self, opts=None) -> None:
 
         self.device = set_device()
-
-        if run_id is not None:
-            self.load_from_id(run_id)
-        else:
-            self.opts = opts    
-            self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
+        self.opts = opts
+        self.restore_artifacts = {}
         
         self.dataset = {}
         self.lossCollection = {}
         self.mlrun = None
         self.artifact_dir = None
+
+        if self.opts['restore'] != '':
+            # restore network structure
+            opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+            self.opts['nn_opts'].update(opts['nn_opts'])
+
+        self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
+        
 
     def setup_problem(self):
         self.pde = create_pde_problem(**(self.opts['pde_opts']))
@@ -56,7 +60,7 @@ class Engine:
             self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.net.init_D)
         else:
             # for basci/inverse, use D_exact
-            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.net.init_D)
+            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.exact_D)
 
         if self.opts['noise_opts']['use_noise']:
             self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
@@ -73,6 +77,7 @@ class Engine:
             # no resgrad, residual loss and data loss only, 
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
+            
         
         elif self.opts['traintype'] == 'forward':
             # fast forward solve using resdual, or together with data loss
@@ -85,6 +90,7 @@ class Engine:
             'resgrad':self.opts['weights']['resgrad'],
             'data':self.opts['weights']['data'],
             'paramgrad':self.opts['weights']['paramgrad']}}
+
             self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
 
         elif self.opts['traintype'] == 'inverse':
@@ -97,13 +103,13 @@ class Engine:
             raise ValueError(f'train type {self.opts["traintype"]} not supported')
         
 
+        if self.opts['restore']!= '':
+            self.restore()
 
         return 
 
 
     def run(self):
-
-        self.load()
 
         print(json.dumps(self.opts, indent=2,sort_keys=True))
         
@@ -133,7 +139,7 @@ class Engine:
                     lossObj.getloss()
                     if lossName=='param':
                         # update param every n-th iteration
-                        if epoch % self.opts['train_opts']['param_every'] == 0:
+                        if epoch % self.opts['train_opts']['print_every'] == 0:
                             lossObj.step()
                     else:
                         lossObj.step()
@@ -166,54 +172,25 @@ class Engine:
             pass
         self.save()
 
-    def load_from_id(self, run_id):
-        helper = MlflowHelper()        
-        artifact_paths = helper.get_artifact_paths(run_id)
-        self.opts = read_json(artifact_paths['options.json'])
-        
-        # reconstruct net from options and load weight
-        self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
-        self.net.load_state_dict(torch.load(artifact_paths['net.pth']))
-        print(f'net loaded from {artifact_paths["net.pth"]}')
 
-    
-    def load(self):
-        # load model and optimizer from mlflow
-        if self.opts['restore'] == '':
-            return
-        
-        # artifact_dir is the path to the artifact folder
-        # check if self.opts['restore'] is 32 string of numbers and letters
-        if len(self.opts['restore'])==32:
-            run_id = self.opts['restore']
-            run = mlflow.get_run(run_id)
-            artifact_dir = run.info.artifact_uri[7:] 
-        # check if artifact_dir exists
-        elif not os.path.exists(self.opts['restore']):
-            artifact_dir = self.opts['restore']
-        else:
-            raise ValueError(f'artifact_dir {artifact_dir} not found')
+    def restore(self):
+        # restore model and optimizer from mlflow
 
-        # note: might have issue if the net is not the same architecture
-        # the net should be reconstructed from options.json
-        # for now, just load the net
-        net_path = os.path.join(artifact_dir,'net.pth')
-        self.net.load_state_dict(torch.load(net_path))
-        
-        print(f'net loaded from {net_path}')
+        self.net.load_state_dict(torch.load(self.restore_artifacts['net.pth']))
+        print(f'net loaded from {self.restore_artifacts["net.pth"]}')
+
         for lossObjName in self.lossCollection:
             lossObj = self.lossCollection[lossObjName]
             
             optim_fname = f"optimizer_{lossObjName}.pth"
-            optim_path = os.path.join(artifact_dir,optim_fname)
-
-            if os.path.exists(optim_path):
+            
+            if optim_fname in self.restore_artifacts:
+                optim_path = self.restore_artifacts[optim_fname]
                 lossObj.optimizer.load_state_dict(torch.load(optim_path))
                 print(f'optimizer {optim_fname} loaded from {optim_path}')
             else:
                 print(f'optimizer {optim_fname} not found, use default optimizer')
 
-    
 
     def save(self):
         
