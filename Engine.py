@@ -39,6 +39,8 @@ class Engine:
             self.opts['nn_opts'].update(opts['nn_opts'])
 
         self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
+
+        self.trainer = None
         
 
     def setup_problem(self):
@@ -109,76 +111,23 @@ class Engine:
         return 
 
 
+
     def run(self):
 
-        print(json.dumps(self.opts, indent=2,sort_keys=True))
-        
-        # creat experiment if not exist
-        mlflow.set_experiment(self.opts['experiment_name'])
-        # start mlflow run
-        mlflow.start_run(run_name=self.opts['run_name'])
-        self.mlrun = mlflow.active_run()
-
-        # mlflow.set_tracking_uri('')
-        tracking_uri = mlflow.get_tracking_uri()
-        print(f"Current tracking uri: {tracking_uri}")
-
-        mlflow.log_params(flatten(self.opts))
-        epoch = 0
-
-        estop = EarlyStopping(**self.opts['train_opts'])
-        try:
-            while True:
-                # Zero the gradients
-                total_loss = 0
-                wloss_comp = {} # component of each loss, weighted
-
-                for lossName in self.lossCollection:
-                    lossObj = self.lossCollection[lossName]
-                    
-                    lossObj.getloss()
-                    if lossName=='param':
-                        # update param every n-th iteration
-                        if epoch % self.opts['train_opts']['print_every'] == 0:
-                            lossObj.step()
-                    else:
-                        lossObj.step()
-
-                    total_loss += lossObj.loss_val
-                    wloss_comp.update(lossObj.wloss_comp)
-
-                wloss_comp['total'] = total_loss
-
-                # convert all value of wloss_comp to float
-                for k in wloss_comp:
-                    wloss_comp[k] = wloss_comp[k].item()
-                
-                # check stop, print statistics
-                stophere = estop(total_loss, {'D':self.net.D}, epoch)
-
-                if epoch % self.opts['train_opts']['print_every'] == 0 or stophere:
-                    print_statistics(epoch, **wloss_comp, D=self.net.D.item())
-                    # log metric using mlflow
-                    mlflow.log_metrics(wloss_comp, step=epoch)
-                    mlflow.log_metrics({'D':self.net.D.item()}, step=epoch)
-
-                epoch += 1  # Increment the epoch counter
-                
-                if stophere:
-                    break  
-                
-        except KeyboardInterrupt:
-            print('Interrupted')
-            pass
-        self.save()
+        self.trainer = Trainer(self.opts, self.net, self.pde, self.dataset, self.lossCollection)
+        self.trainer.setup_mlflow()
+        self.trainer.train()
+        self.trainer.save(self.artifact_dir)
 
 
     def restore(self):
-        # restore model and optimizer from mlflow
+        # self.restore_artifacts is dictionary of file_name: file_path of the artifacts to be restored
 
+        # restore network structure
         self.net.load_state_dict(torch.load(self.restore_artifacts['net.pth']))
         print(f'net loaded from {self.restore_artifacts["net.pth"]}')
 
+        # restore optimizer
         for lossObjName in self.lossCollection:
             lossObj = self.lossCollection[lossObjName]
             
@@ -192,38 +141,8 @@ class Engine:
                 print(f'optimizer {optim_fname} not found, use default optimizer')
 
 
-    def save(self):
-        
-        artifact_uri = mlflow.get_artifact_uri()
-        artifact_uri = artifact_uri[7:] # remove file://
-        
-        def genpath(filename):
-            path = os.path.join(artifact_uri, filename)
-            return path
-
-        # save model and optimizer to mlflow
-        torch.save(self.net.state_dict(), genpath("net.pth"))
-        
-        for lossObjName in self.lossCollection:
-            lossObj = self.lossCollection[lossObjName]
-            fname = f"optimizer_{lossObjName}.pth"
-            fpath = genpath(fname)
-            torch.save(lossObj.optimizer.state_dict(), fpath)
-            
-        # save options
-        savedict(self.opts, genpath("options.json"))
-        
-        # save dataset
-        self.dataset.save(genpath("dataset.mat"))
-        
-        print(f'artifacts saved {artifact_uri}')
-        self.artifact_dir = artifact_uri
-
-
         
 if __name__ == "__main__":
-    
-    
 
     optobj = Options()
     optobj.parse_args(*sys.argv[1:])

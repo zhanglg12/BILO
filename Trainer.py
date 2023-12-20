@@ -1,4 +1,5 @@
 # for training the network
+# need: options, network, pde, dataset, lossCollection
 from lossCollection import *
 from DensePoisson import *
 import mlflow
@@ -15,6 +16,11 @@ class Trainer:
     
     def setup_mlflow(self): 
 
+        if self.opts['experiment_name'] == '':
+            # do not use mlflow, self.mlrun is None
+            return
+        
+        # end previous run if exist
         mlflow.end_run()
         # creat experiment if not exist
         mlflow.set_experiment(self.opts['experiment_name'])
@@ -57,24 +63,28 @@ class Trainer:
 
                 wloss_comp['total'] = total_loss
 
+                # get weighted loss components
                 for k in wloss_comp:
                     wloss_comp[k] = wloss_comp[k].item()
 
+                # check early stopping
                 stophere = estop(total_loss, {'D':self.net.D}, epoch)
 
+                # print statistics at interval or at stop
                 if epoch % self.opts['train_opts']['print_every'] == 0 or stophere:
                     print_statistics(epoch, **wloss_comp, D=self.net.D.item())
                     # log metric using mlflow if available
                     if self.mlrun is not None:
                         mlflow.log_metrics(wloss_comp, step=epoch)
                         mlflow.log_metrics({'D':self.net.D.item()}, step=epoch)
-
-                epoch += 1
-
                 if stophere:
                     break  
-            
+
+                # next cycle
+                epoch += 1
+
         except KeyboardInterrupt:
+            # if interrupted, exit training, save is called elsewhere
             print('Interrupted')
 
     def save(self, dirname):
