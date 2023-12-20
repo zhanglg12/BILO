@@ -30,7 +30,7 @@ class lossCollection:
                 self.loss_active.append(k)
 
     
-        self.loss_comp = {} # component of each loss
+        self.wloss_comp = {} # component of each loss, weighted
         self.loss_val = None # total loss for backprop
 
 
@@ -73,7 +73,7 @@ class lossCollection:
             losses[key] = self.loss_weight[key] * self.loss_dict[key]()
             weighted_sum += losses[key]
         
-        self.loss_comp = losses
+        self.wloss_comp = losses
         self.loss_val = weighted_sum
 
     def step(self):

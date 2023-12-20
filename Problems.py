@@ -36,7 +36,7 @@ class PoissonProblem2():
         u_pred = nn.forward(x)
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = u_xx + u_x - 1.0
+        res = u_xx + u_x - 10.0
         return res, u_pred
 
     def f(self, x):
@@ -44,7 +44,7 @@ class PoissonProblem2():
 
     def u_exact(self, x, D):
         e = torch.exp(torch.tensor(1.0))
-        return (e - torch.exp(1.0-x) + x - e * x) / (1.0 - e)
+        return 10*( -x + e * (-1.0 + torch.exp(-x)+x)) / (-1.0 + e)
 
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']

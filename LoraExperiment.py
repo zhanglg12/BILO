@@ -76,6 +76,7 @@ trainer = Trainer(optobj.opts, model, pde, dataset, lc)
 
 summary(model,verbose=2,col_names=["num_params", "trainable"])
 
+exit()
 trainer.setup_mlflow()
 trainer.train()
 

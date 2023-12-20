@@ -131,7 +131,7 @@ class Engine:
             while True:
                 # Zero the gradients
                 total_loss = 0
-                loss_comp = {}
+                wloss_comp = {} # component of each loss, weighted
 
                 for lossName in self.lossCollection:
                     lossObj = self.lossCollection[lossName]
@@ -145,21 +145,21 @@ class Engine:
                         lossObj.step()
 
                     total_loss += lossObj.loss_val
-                    loss_comp.update(lossObj.loss_comp)
+                    wloss_comp.update(lossObj.wloss_comp)
 
-                loss_comp['total'] = total_loss
+                wloss_comp['total'] = total_loss
 
-                # convert all value of loss_comp to float
-                for k in loss_comp:
-                    loss_comp[k] = loss_comp[k].item()
+                # convert all value of wloss_comp to float
+                for k in wloss_comp:
+                    wloss_comp[k] = wloss_comp[k].item()
                 
                 # check stop, print statistics
                 stophere = estop(total_loss, {'D':self.net.D}, epoch)
 
                 if epoch % self.opts['train_opts']['print_every'] == 0 or stophere:
-                    print_statistics(epoch, **loss_comp, D=self.net.D.item())
+                    print_statistics(epoch, **wloss_comp, D=self.net.D.item())
                     # log metric using mlflow
-                    mlflow.log_metrics(loss_comp, step=epoch)
+                    mlflow.log_metrics(wloss_comp, step=epoch)
                     mlflow.log_metrics({'D':self.net.D.item()}, step=epoch)
 
                 epoch += 1  # Increment the epoch counter
