@@ -1,26 +1,28 @@
+#!/usr/bin/env python
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from util import *
 from config import *
 from MlflowHelper import MlflowHelper
+from Problems import *
 
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
 class DensePoisson(nn.Module):
-    def __init__(self, depth, width, use_resnet=False, basic=False, init_D=1.0, p = 1, useFourierFeatures=False):
+    def __init__(self, depth, width, use_resnet=False, basic=False, params_dict=None, p = 1, useFourierFeatures=False):
         super().__init__()
         
         
         self.depth = depth
         self.width = width
         self.use_resnet = use_resnet
-        self.init_D = init_D
         self.basic = basic
         self.useFourierFeatures = useFourierFeatures
+        self.params_dict = params_dict #PDE parameters
         
-        self.p = p  # determine class of problem, larger p -> more oscillations
-
+    
         if self.useFourierFeatures:
             print('Using Fourier Features')
             self.fflayer = nn.Linear(1, width)
@@ -36,37 +38,62 @@ class DensePoisson(nn.Module):
         if use_resnet:
             self.residual_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
         
-        self.D = nn.Parameter(torch.tensor([init_D]))  # initialize D to 1
+        
 
-        # for basic version, D is not part of the network
+        # for basic version, pde parameter is not part of the network (but part of module)
+        # for inverse problem, create embedding layer for pde parameter
         if self.basic == False:
-            self.fcD = nn.Linear(1, width, bias=False)
-            self.fcD.requires_grad = False
+            # Create embedding layers for each parameter
+            self.param_embeddings = nn.ModuleDict({
+                name: nn.Linear(1, width, bias=False) for name, param in self.params_dict.items()
+            })
+            # set requires_grad to False
+            for param in self.param_embeddings.parameters():
+                param.requires_grad = False
 
 
-        # separate parameters for the neural net and the PDE parameter
-        # self.param_net = [param for param in self.parameters() if (param is not self.D) and (param is not self.fcD)]
-
+        # separate parameters for the neural net and the PDE parameters
         self.param_net = list(self.input_layer.parameters()) +\
                             [param for layer in self.hidden_layers for param in layer.parameters()] +\
                             list(self.output_layer.parameters())
 
-        self.param_pde = [self.D]
-        
+        self.param_pde = [self.params_dict[name] for name in self.params_dict.keys()]
 
+        self.param_all = self.param_net + self.param_pde
+    
+
+    def embedding(self, x):
+        '''
+        No fourier feature embedding:
+            then y = x
+        if fourier feature embedding:
+            then y = sin(2*pi* (Wx+b))
+        
+        if basic, then Wy+b
+        if inverse, then Wy+b + W'p+b' (pde parameter embedding)
+
+        '''
+        # fourier feature embedding
+        if self.useFourierFeatures:
+            x = torch.sin(2 * torch.pi * self.fflayer(x))
+        else:
+            x = self.input_layer(x)
+
+        if self.basic == False:
+            for name, param in self.params_dict.items():
+                param_embedding = self.param_embeddings[name](param.unsqueeze(0))
+                x += param_embedding
+
+        return x
+        
     def forward(self, x):
         
         # fbc = torch.sin(torch.pi * x) # transformation of nn to impose boundary condition
         fbc = x * (1 - x) 
 
-
-        if self.useFourierFeatures:
-            x = torch.sin(2 * torch.pi * self.fflayer(x))
-   
-        if self.basic == False:
-            x = torch.sigmoid(self.input_layer(x) + self.fcD(self.D))
-        else:
-            x = torch.sigmoid(self.input_layer(x))
+        # sin transformation of embedding
+        x = self.embedding(x)
+        x = torch.sigmoid(x)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
             hidden_output = torch.sigmoid(hidden_layer(x))
@@ -140,28 +167,22 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 
 
 # set up simple test
+# creat a network, compute residual, compute loss, no training
 if __name__ == "__main__":
     device = set_device('cpu')
+    param_dict = {'D':torch.tensor(1.0).to(device)}
 
-    # basic version
-    # net = DensePoisson(2,6,basic=True).to(device)
+    net = DensePoisson(2,6, params_dict=param_dict).to(device)
+    prob = PoissonProblem(p=1, exact_D=1.0)
     
-    net = DensePoisson(2,6).to(device)
-
-    exact_D = 2.0
     dataset = {}
-    dataset['x_res_train'] = torch.linspace(0, 1, 20).view(-1, 1).to(device)
-    dataset['x_res_train'].requires_grad_(True)
-    dataset['u_res_train'] = net.u_exact(dataset['x_res_train'], exact_D)
+    x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
+    x.requires_grad_(True)
+    y = prob.u_exact(x, prob.exact_D)
+    res, u_pred = prob.residual(net, x, net.params_dict['D'])
 
-    lossopt = {'weights':{'res':1.0,'data':1.0}}
+    # print 2 norm of res
+    print(torch.norm(res))
+    print(torch.norm(y-u_pred))
 
-    # train basic version
-    # lossObj = lossCollection(net, dataset, list(net.parameters()), optim.Adam, lossopt)
-
-    # train inverse problem
-    loss_pde_opts = {'weights':{'res':1.0,'resgrad':1.0}}
-    loss_pde = lossCollection(net, dataset, net.param_net, optim.Adam, loss_pde_opts)
-
-    loss_data_opts = {'weights':{'data':1.0}}
-    loss_data = lossCollection(net, dataset, net.param_pde, optim.Adam, loss_data_opts)
+    

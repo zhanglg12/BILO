@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+
 # for training the network
 # need: options, network, pde, dataset, lossCollection
 from lossCollection import *
 from DensePoisson import *
 import mlflow
+import torch.optim as optim
 
 class Trainer:
     def __init__(self, opts, net, pde, dataset, lossCollection):
@@ -42,7 +45,7 @@ class Trainer:
         # print(self.device)
 
         epoch = 0
-        estop = EarlyStopping(**self.opts['train_opts'])
+        estop = EarlyStopping(**self.opts)
         try:
             while True:
                 total_loss = 0
@@ -52,11 +55,8 @@ class Trainer:
                     lossObj = self.lossCollection[lossName]
                     
                     lossObj.getloss()
-                    if lossName=='param':
-                        if epoch % self.opts['train_opts']['param_every'] == 0:
-                            lossObj.step()
-                    else:
-                        lossObj.step()
+                    
+                    lossObj.step()
 
                     total_loss += lossObj.loss_val
                     wloss_comp.update(lossObj.wloss_comp)
@@ -68,15 +68,15 @@ class Trainer:
                     wloss_comp[k] = wloss_comp[k].item()
 
                 # check early stopping
-                stophere = estop(total_loss, {'D':self.net.D}, epoch)
+                stophere = estop(total_loss, self.net.params_dict, epoch)
 
                 # print statistics at interval or at stop
-                if epoch % self.opts['train_opts']['print_every'] == 0 or stophere:
-                    print_statistics(epoch, **wloss_comp, D=self.net.D.item())
+                if epoch % self.opts['print_every'] == 0 or stophere:
+                    print_statistics(epoch, **wloss_comp, **self.net.params_dict)
                     # log metric using mlflow if available
                     if self.mlrun is not None:
                         mlflow.log_metrics(wloss_comp, step=epoch)
-                        mlflow.log_metrics({'D':self.net.D.item()}, step=epoch)
+                        mlflow.log_metrics(self.net.params_dict, step=epoch)
                 if stophere:
                     break  
 
@@ -112,4 +112,29 @@ class Trainer:
         print(f'artifacts saved {dirname}')
         
     
+# simple test on training routine
+if __name__ == "__main__":
+    device = set_device('cuda')
 
+    # setup network
+    param_dict = {'D':torch.tensor(1.0).to(device)}
+    param_dict['D'].requires_grad = True
+    net = DensePoisson(2,6, params_dict=param_dict, basic=True).to(device)
+
+    # setup problem
+    pde = PoissonProblem(p=1, exact_D=1.0)
+    
+    # setup dataset
+    dataset = setup_dataset(pde,  {}, {'N_res_train':20, 'N_res_test':20})
+    dataset['x_res_train'].requires_grad = True
+
+    # set up loss
+    param_to_train = net.param_all
+    loss_pde_opts = {'weights':{'res': 1.0,'data': 1.0}}
+    lc = {}
+    lc['forward'] = lossCollection(net, pde, dataset, param_to_train, optim.Adam, loss_pde_opts)
+
+    # set up trainer
+    trainer_opts = {'print_every':1}
+    trainer = Trainer(trainer_opts, net, pde, dataset, lc)
+    trainer.train()

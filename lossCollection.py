@@ -1,3 +1,15 @@
+'''
+this class handle the loss function and computing gradient
+net = neural net class
+dataset = data set class,
+pde = pde class, take net and dataset to compute residual
+param = list of parameters to optimize, either network weight or pde parameter
+lossCollection compute different loss, in particular 
+residual loss: residual of pde 
+residual gradient loss: derivative of residual w.r.t. pde parameter
+data loss: MSE of data
+'''
+
 from DataSet import DataSet
 from util import *
 
@@ -35,13 +47,13 @@ class lossCollection:
 
 
     def computeResidual(self):
-        # self.res, self.res_D, self.u_pred, self.u_D = self.net.residual(self.dataset['x_res_train'], self.net.D)
-        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.D)
+        
+        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict['D'])
         return self.res, self.u_pred
 
     def computeResidualGrad(self):
         # compute gradient of residual w.r.t. parameter
-        self.res_D = torch.autograd.grad(self.res, self.net.D, create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+        self.res_D = torch.autograd.grad(self.res, self.net.params_dict['D'], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
         return self.res_D
         
 
@@ -103,7 +115,8 @@ def setup_dataset(pde, noise_opts, ds_opts):
     # generate data, might be noisy
     dataset['u_res_train'] = pde.u_exact(dataset['x_res_train'], pde.exact_D)
 
-    if noise_opts['use_noise']:
+
+    if noise_opts and noise_opts['use_noise']:
         dataset['noise'] = generate_grf(xtmp, noise_opts['variance'],noise_opts['length_scale'])
         dataset['u_res_train'] = dataset['u_res_train'] + dataset['noise']
         print('Noise added')
@@ -148,7 +161,4 @@ class EarlyStopping:
             else:
                 self.best_loss = loss
                 self.counter_loss = 0
-
-            
-
         return False
