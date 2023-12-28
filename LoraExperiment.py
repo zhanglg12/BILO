@@ -81,7 +81,7 @@ trainer.setup_mlflow()
 trainer.train()
 
 
-artifact_dir = get_artifact_dir()
+artifact_dir = get_active_artifact_dir()
 
 
 # if use lora, save the low rank state dict, merge weight (can not be undone)
@@ -89,7 +89,7 @@ artifact_dir = get_artifact_dir()
 
 if optobj.opts['transfer_opts']['transfer_method'] == 'lora':
     lora_state_dict = get_lora_state_dict(model)
-    torch.save(lora_state_dict, get_artifact_path('lora_state_dict.pth'))
+    torch.save(lora_state_dict, get_active_artifact_path('lora_state_dict.pth'))
     merge_lora(model)
 
     trainer.save(artifact_dir)# need to merge the weight so that the prediction is correct

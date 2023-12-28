@@ -45,7 +45,7 @@ class MlflowHelper:
 
         return run_id
 
-    def get_artifact_paths(self, run_id):
+    def get_active_artifact_paths(self, run_id):
         
         # get artifact dir
         run = mlflow.get_run(run_id)
@@ -82,7 +82,7 @@ class MlflowHelper:
         return metrics_history, metrics
 
 
-def get_artifact_dir():
+def get_active_artifact_dir():
     # Get the current artifact URI
     artifact_uri = mlflow.get_artifact_uri()
 
@@ -92,9 +92,9 @@ def get_artifact_dir():
 
     return artifact_dir
 
-def get_artifact_path(filename):
+def get_active_artifact_path(filename):
     # generate path for current run
-    artifact_dir = get_artifact_dir()
+    artifact_dir = get_active_artifact_dir()
     # Append the filename
     file_path = os.path.join(artifact_dir, filename)
 
@@ -111,4 +111,4 @@ if __name__ == "__main__":
     kwargs = dict(arg.split('=') for arg in sys.argv[1:])
     id = helper.get_run(**kwargs)
     print(id)
-    print_dict(helper.get_artifact_paths(id))
+    print_dict(helper.get_active_artifact_paths(id))

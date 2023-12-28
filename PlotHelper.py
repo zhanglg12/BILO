@@ -11,6 +11,18 @@ from DataSet import DataSet
 from Problems import *
 from matplotlib import pyplot as plt
 
+DEBUG = True
+def catch_plot_errors(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if DEBUG:
+                raise
+            else:
+                print(f"An error occurred while plotting: {e}")
+    return wrapper
+
 class PlotHelper:
     def __init__(self, pde, dataset, **kwargs) -> None:
 
@@ -24,38 +36,45 @@ class PlotHelper:
         self.opts['save_dir'] = './tmp'
         self.opts.update(kwargs)
 
-    
-    def plot_variation(self, net, Ds):
-        # plot variation of D
+    @catch_plot_errors
+    def plot_variation(self, net):
+        # plot variation of net w.r.t each parameter
 
         x_test = self.dataset['x_res_test']
 
-        # color order
-        c = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
         u_test = net(x_test)
-        u_init_test = self.pde.u_exact(x_test, net.init_D)
+        u_init_test = self.pde.u_exact(x_test, net.params_dict)
 
         fig, ax = plt.subplots()
 
+        # get device of current network
         device = next(net.parameters()).device
         
-        for i in range(len(Ds)):
-            D = Ds[i]
-            # reset D to other values
-            with torch.no_grad():
-                net.D.data = torch.tensor([D]).to(device)
-            # 
-            u_test = net(x_test)
-            ax.plot(x_test.cpu().numpy(), u_test.cpu().detach().numpy(), label='NN D = {}'.format(D),color=c[i])
+        # for each net.params_dict, plot the solution and variation
+        for k, v in net.params_dict.items():
+            param_value = net.params_dict[k].item()
+            param_name = k
 
-            u_exact_test = self.pde.u_exact(x_test, D)
-            ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().numpy(), label='exact D = {}'.format(D),color=c[i],linestyle='--')
-        # set net.D
-        ax.legend(loc="upper right")
+            deltas = [0.0, 0.1, -0.1]
+            for delta in deltas:    
+                
+                # replace parameter
+                with torch.no_grad():    
+                    new_value = param_value + delta
+                    net.params_dict[param_name].data = torch.tensor([[new_value]]).to(device)
+                
+                u_test = net(x_test)
+                ax.plot(x_test.cpu().numpy(), u_test.cpu().detach().numpy(), label=f'NN {param_name} = {new_value:.2e}')
 
-        if self.opts['yessave']:
-            self.save('fig_variation.png', fig)
+                u_exact_test = self.pde.u_exact(x_test, net.params_dict)
+                # get the color of previous line
+                color = ax.lines[-1].get_color()
+                ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().detach().numpy(), label=f'exact {param_name} = {new_value:.2e}',color=color,linestyle='--')
+            # set net.D
+            ax.legend(loc="best")
+
+            if self.opts['yessave']:
+                self.save(f'fig_variation_{param_name}.png', fig)
 
         return fig, ax
 
@@ -65,45 +84,58 @@ class PlotHelper:
         fpath = os.path.join(self.opts['save_dir'], fname)
         fig.savefig(fpath, dpi=300, bbox_inches='tight')
         print(f'{fname} saved to {fpath}')
-
+     
+    @catch_plot_errors
     def plot_prediction(self, net):
         x_test = self.dataset['x_res_test']
 
         u_test = net(x_test)
-        u_init_test = self.pde.u_exact(x_test, net.init_D)
-        u_exact_test = self.pde.u_exact(x_test, self.pde.exact_D)
+        u_init_test = self.pde.u_exact(x_test, self.pde.init_param)
+        u_exact_test = self.pde.u_exact(x_test, self.pde.exact_param)
 
         # excat u with predicted D, for comparison
-        u_exact_pred_D_test = self.pde.u_exact(x_test, net.D.item())
+        u_exact_pred_D_test = self.pde.u_exact(x_test, net.params_dict)
 
-        x_res_train = self.dataset['x_res_train'].detach()
-        u_pred = net(x_res_train).detach()
-        u_res = self.dataset['u_res_train'].detach()
+        x_res_train = self.dataset['x_res_train']
+        u_pred = net(x_res_train)
+        u_res = self.dataset['u_res_train']
+
+        # move to cpu
+        x_test = x_test.cpu().detach().numpy()
+        u_test = u_test.cpu().detach().numpy()
+        u_init_test = u_init_test.cpu().detach().numpy()
+        u_exact_test = u_exact_test.cpu().detach().numpy()
+        u_exact_pred_D_test = u_exact_pred_D_test.cpu().detach().numpy()
+        x_res_train = x_res_train.cpu().numpy()
+        u_pred = u_pred.cpu().detach().numpy()
+        u_res = u_res.cpu().detach().numpy()
 
         # visualize the results
         fig, ax = plt.subplots()
         
         # plot nn prediction
-        ax.plot(x_test.cpu().numpy(), u_test.cpu().detach().numpy(), label='nn pred')
+        ax.plot(x_test, u_test, label='nn pred')
         # plot exact solution
-        ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().numpy(), label='GT')
-        ax.plot(x_test.cpu().numpy(), u_exact_pred_D_test.cpu().numpy(), label='exact pred D',linestyle='--',color='gray')
+        ax.plot(x_test, u_exact_test, label='GT')
+        ax.plot(x_test, u_exact_pred_D_test, label='exact pred D',linestyle='--',color='gray')
         
         # scatter plot of training data
-        ax.plot(x_res_train.cpu().numpy(), u_pred.cpu().numpy(), '.', label='train-pred')
-        ax.plot(x_res_train.cpu().numpy(), u_res.cpu().numpy(), '.', label='train-data')
+        ax.plot(x_res_train, u_pred, '.', label='train-pred')
+        ax.plot(x_res_train, u_res, '.', label='train-data')
 
 
         ax.legend(loc="upper right")
         # add title
 
-        ax.set_title(f'final D: {net.D.item():.3f}')
+        D = net.params_dict['D'].item()
+        ax.set_title(f'final D: {D:.3f}')
 
         if self.opts['yessave']:
             self.save('fig_pred.png', fig)
 
         return fig, ax
-
+    
+    @catch_plot_errors
     def plot_loss(self, hist, loss_names=None):
         # plot loss history
         fig, ax = plt.subplots()
@@ -140,7 +172,7 @@ def output_svd(m1, m2, layer_name):
     _, s_diff, _ = torch.svd(W1 - W2)
     return s1, s2, s_diff
 
-
+@catch_plot_errors
 def plot_svd(s1, s2, s_diff, name1, name2, namediff):
     # sve plot, 
     # s1, s2, s_diff are the svd of the weight and svd of the difference
@@ -166,7 +198,7 @@ if __name__ == "__main__":
     # get run id from mlflow, load hist and options
     helper = MlflowHelper()
     run_id = helper.get_id_by_name(exp_name, run_name)
-    atf_dict = helper.get_artifact_paths(run_id)
+    atf_dict = helper.get_active_artifact_paths(run_id)
     hist = helper.get_metric_history(run_id)
     opts = read_json(atf_dict['options.json'])
 
@@ -186,7 +218,7 @@ if __name__ == "__main__":
 
     ph.plot_prediction(nn)
     D = nn.D.item()
-    ph.plot_variation(nn, [D-0.1, D, D+0.1])
+    ph.plot_variation(nn)
 
     hist,_ = helper.get_metric_history(run_id)
     ph.plot_loss(hist,list(opts['weights'].keys())+['total'])

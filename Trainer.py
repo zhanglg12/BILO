@@ -4,12 +4,13 @@
 # need: options, network, pde, dataset, lossCollection
 from lossCollection import *
 from DensePoisson import *
-import mlflow
+from Logger import Logger
 import torch.optim as optim
 
 class Trainer:
-    def __init__(self, opts, net, pde, dataset, lossCollection):
+    def __init__(self, opts, net, pde, dataset, lossCollection, logger:Logger):
         self.opts = opts
+        self.logger = logger
         self.net = net
         self.pde = pde
         self.dataset = dataset
@@ -17,26 +18,7 @@ class Trainer:
         self.mlrun = None
         self.device = set_device()
     
-    def setup_mlflow(self): 
-
-        if self.opts['experiment_name'] == '':
-            # do not use mlflow, self.mlrun is None
-            return
-        
-        # end previous run if exist
-        mlflow.end_run()
-        # creat experiment if not exist
-        mlflow.set_experiment(self.opts['experiment_name'])
-        # start mlflow run
-        mlflow.start_run(run_name=self.opts['run_name'])
-        self.mlrun = mlflow.active_run()
-
-        # mlflow.set_tracking_uri('')
-        tracking_uri = mlflow.get_tracking_uri()
-        print(f"Current tracking uri: {tracking_uri}")
-
-        mlflow.log_params(flatten(self.opts))
-
+    
     def train(self):
 
         self.net.to(self.device)
@@ -72,11 +54,8 @@ class Trainer:
 
                 # print statistics at interval or at stop
                 if epoch % self.opts['print_every'] == 0 or stophere:
-                    print_statistics(epoch, **wloss_comp, **self.net.params_dict)
-                    # log metric using mlflow if available
-                    if self.mlrun is not None:
-                        mlflow.log_metrics(wloss_comp, step=epoch)
-                        mlflow.log_metrics(self.net.params_dict, step=epoch)
+                    self.logger.log_metrics(wloss_comp, step=epoch)
+                    self.logger.log_metrics(self.net.params_dict, step=epoch)
                 if stophere:
                     break  
 
@@ -89,13 +68,18 @@ class Trainer:
 
     def save(self, dirname):
         # save training results  
+        # this change the device of the network
         
         def genpath(filename):
             path = os.path.join(dirname, filename)
             return path
+        
+        # make directory if not exist
+        os.makedirs(dirname, exist_ok=True)
 
         # save model and optimizer to mlflow
-        torch.save(self.net.state_dict(), genpath("net.pth"))
+        net_path = genpath("net.pth")
+        torch.save(self.net.state_dict(), net_path)
         
         for lossObjName in self.lossCollection:
             lossObj = self.lossCollection[lossObjName]
@@ -128,6 +112,11 @@ if __name__ == "__main__":
     dataset = setup_dataset(pde,  {}, {'N_res_train':20, 'N_res_test':20})
     dataset['x_res_train'].requires_grad = True
 
+    # setup logger
+    logger_opts = {'use_mlflow':False, 'use_stdout':True, 'use_csv':False}
+    logger = Logger(logger_opts)
+
+
     # set up loss
     param_to_train = net.param_all
     loss_pde_opts = {'weights':{'res': 1.0,'data': 1.0}}
@@ -136,5 +125,5 @@ if __name__ == "__main__":
 
     # set up trainer
     trainer_opts = {'print_every':1}
-    trainer = Trainer(trainer_opts, net, pde, dataset, lc)
+    trainer = Trainer(trainer_opts, net, pde, dataset, lc, logger)
     trainer.train()

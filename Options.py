@@ -4,8 +4,12 @@ import ast
 
 
 default_opts = {
-    'run_name': 'tmp',
-    'experiment_name': 'dev',
+    'logger_opts': {'use_mlflow':False,
+                    'use_stdout':True,
+                    'use_csv':False,
+                    'experiment_name':'dev',
+                    'run_name':'test',
+                    'save_dir':'./runs/tmp'},
     'restore': '',
     'traintype': 'basic',
     'smallrun': False, 
@@ -18,16 +22,13 @@ default_opts = {
     },
     'pde_opts': {
         'problem': 'PoissonProblem',
-        'p': 1,
-        'exact_D': 1.0,
     },
     'nn_opts': {
         'depth': 4,
         'width': 64,
         'use_resnet': False,
-        'basic': False,
-        'init_D': 1.0,
-        'useFourierFeatures':True,
+        'with_param': False,
+        'useFourierFeatures':False,
     },
     'dataset_opts': {
         'N_res_train': 100,
@@ -50,7 +51,7 @@ default_opts = {
     },
     'weights': {
         'res': 1.0,
-        'resgrad': 1.0,
+        'resgrad': 0.001,
         'data': 1.0,
         'paramgrad': None,
     }
@@ -145,6 +146,8 @@ class Options:
             self.opts['train_opts']['print_every'] = 1
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = 0.0
+            # for vanilla PINN, nn does not include parameter
+            self.opts['nn_opts']['with_param'] = False
             
         
         

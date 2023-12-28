@@ -48,7 +48,7 @@ class lossCollection:
 
     def computeResidual(self):
         
-        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict['D'])
+        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict)
         return self.res, self.u_pred
 
     def computeResidualGrad(self):
@@ -162,3 +162,7 @@ class EarlyStopping:
                 self.best_loss = loss
                 self.counter_loss = 0
         return False
+
+
+# if __name__ == "__main__":
+#     # test to check if the loss can be computed

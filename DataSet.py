@@ -48,28 +48,28 @@ class DataSet(dict):
         '''save data set to .mat file
         '''
         # save data set to .mat file
+        print(f'save dataset to {file_path}')
         self.to_cpu()
         savemat(file_path, self)
     
     def to_torch(self):
         '''convert numpy array to torch tensor
         '''
+        print('convert dataset to torch')
         for key, value in self.items():
             self[key] = torch.tensor(value)
     
     def to_cpu(self):
         '''convert tensor to cpu
         '''
+        print('move dataset to cpu')
         for key, value in self.items():
             self[key] = value.cpu().detach()
     
     def to_device(self, device):
-        '''convert tensor to cpu
-        '''
-        print(f'convert to {device}')
+        print(f'move dataset to {device}')
         for key, value in self.items():
             self[key] = value.to(device)
-            # print(f'{key}:\t{self[key].device}')
             
     
 

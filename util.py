@@ -26,6 +26,11 @@ def mse(x, y = 0):
 def print_dict(d):
     print(json.dumps(d, indent=4,sort_keys=True))
 
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def print_statistics(epoch, **losses):
@@ -105,3 +110,19 @@ def generate_grf(x, a, l):
     grf_torch = torch.tensor(grf_numpy, dtype=torch.float32).view(x.shape)
 
     return grf_torch
+
+
+def to_double(x):
+    """
+    Converts a torch tensor to double
+    """
+    if isinstance(x,float):
+        return x
+    elif isinstance(x, torch.Tensor):
+        return x.item()
+    elif isinstance(x, torch.nn.ParameterDict) or isinstance(x, dict):
+        return {key: to_double(value) for key, value in x.items()}
+    else:
+        raise ValueError(f'Unknown type: {type(x)}')
+    
+        

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+import sys
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
+
 from util import *
 from config import *
 from MlflowHelper import MlflowHelper
@@ -11,18 +12,22 @@ from Problems import *
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
 class DensePoisson(nn.Module):
-    def __init__(self, depth, width, use_resnet=False, basic=False, params_dict=None, p = 1, useFourierFeatures=False):
+    def __init__(self, depth, width, use_resnet=False, with_param=False, params_dict=None, useFourierFeatures=False):
         super().__init__()
         
         
         self.depth = depth
         self.width = width
         self.use_resnet = use_resnet
-        self.basic = basic
+        self.with_param = with_param # if True, then the pde parameter is part of the network
         self.useFourierFeatures = useFourierFeatures
-        self.params_dict = params_dict #PDE parameters
-        
-    
+
+        # convert float to tensor of size (1,1)
+        # need ParameterDict to make it registered, otherwise to(device) will not automatically move it to device
+        tmp = {k: nn.Parameter(torch.tensor([[v]])) for k, v in params_dict.items()}
+        self.params_dict = nn.ParameterDict(tmp)
+
+
         if self.useFourierFeatures:
             print('Using Fourier Features')
             self.fflayer = nn.Linear(1, width)
@@ -40,9 +45,9 @@ class DensePoisson(nn.Module):
         
         
 
-        # for basic version, pde parameter is not part of the network (but part of module)
+        # for with_param version, pde parameter is not part of the network (but part of module)
         # for inverse problem, create embedding layer for pde parameter
-        if self.basic == False:
+        if self.with_param == True:
             # Create embedding layers for each parameter
             self.param_embeddings = nn.ModuleDict({
                 name: nn.Linear(1, width, bias=False) for name, param in self.params_dict.items()
@@ -53,6 +58,7 @@ class DensePoisson(nn.Module):
 
 
         # separate parameters for the neural net and the PDE parameters
+        # neural net parameter exclude parameter embedding and fourier feature embedding layer
         self.param_net = list(self.input_layer.parameters()) +\
                             [param for layer in self.hidden_layers for param in layer.parameters()] +\
                             list(self.output_layer.parameters())
@@ -69,7 +75,7 @@ class DensePoisson(nn.Module):
         if fourier feature embedding:
             then y = sin(2*pi* (Wx+b))
         
-        if basic, then Wy+b
+        if with_param, then Wy+b
         if inverse, then Wy+b + W'p+b' (pde parameter embedding)
 
         '''
@@ -79,9 +85,9 @@ class DensePoisson(nn.Module):
         else:
             x = self.input_layer(x)
 
-        if self.basic == False:
+        if self.with_param:
             for name, param in self.params_dict.items():
-                param_embedding = self.param_embeddings[name](param.unsqueeze(0))
+                param_embedding = self.param_embeddings[name](param)
                 x += param_embedding
 
         return x
@@ -148,7 +154,7 @@ def load_artifact(exp_name=None, run_name=None, run_id=None, name_str=None):
     if run_id is None:
         run_id = helper.get_id_by_name(exp_name, run_name)
 
-    artifact_paths = helper.get_artifact_paths(run_id)
+    artifact_paths = helper.get_active_artifact_paths(run_id)
     opts = read_json(artifact_paths['options.json'])
     return opts, artifact_paths
 
@@ -169,17 +175,26 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 # set up simple test
 # creat a network, compute residual, compute loss, no training
 if __name__ == "__main__":
-    device = set_device('cpu')
-    param_dict = {'D':torch.tensor(1.0).to(device)}
 
-    net = DensePoisson(2,6, params_dict=param_dict).to(device)
-    prob = PoissonProblem(p=1, exact_D=1.0)
+    nnopts = {'depth':2, 'width':6, 'use_resnet':False, 'with_param':False, 'params_dict':{'D':1.0},'useFourierFeatures':False}
+    
+    # read options from command line key value pairs
+    args = sys.argv[1:]
+    for i in range(0, len(args), 2):
+        key = args[i]
+        val = args[i+1]
+        nnopts[key] = val
+
+    device = set_device('cuda')
+    
+    net = DensePoisson(**nnopts).to(device)
+    prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
     
     dataset = {}
     x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
     x.requires_grad_(True)
-    y = prob.u_exact(x, prob.exact_D)
-    res, u_pred = prob.residual(net, x, net.params_dict['D'])
+    y = prob.u_exact(x, prob.exact_param)
+    res, u_pred = prob.residual(net, x, net.params_dict)
 
     # print 2 norm of res
     print(torch.norm(res))

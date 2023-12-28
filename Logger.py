@@ -17,7 +17,7 @@ class Logger:
             self.mlrun = mlflow.active_run()
 
         if self.opts['use_stdout']:
-            self.stdout_logger = StdoutLogger()
+            self.stdout_logger = StdoutLogger(precision=6)
 
         if self.opts['use_csv']:
             # create dir if not exist
@@ -30,9 +30,10 @@ class Logger:
         
         
 
-    def log_metric(self, metric_dict:dict, step=None):
+    def log_metrics(self, metric_dict:dict, step=None):
         if self.opts['use_mlflow']:
-            mlflow.log_metrics(metric_dict, step=step)
+
+            mlflow.log_metrics(to_double(metric_dict), step=step)
 
         if self.opts['use_stdout']:
             self.stdout_logger.log_dict(payload = metric_dict, step=step)
@@ -80,8 +81,8 @@ if __name__ == "__main__":
 
     logger = Logger(opts)
     for i in range(10):
-        logger.log_metric({'loss':i}, step=i)
-        logger.log_metric({'param':i}, step=i)
+        logger.log_metrics({'loss':i}, step=i)
+        logger.log_metrics({'param':i}, step=i)
     
     logger.log_options(opts)
     print('')

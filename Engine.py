@@ -17,9 +17,9 @@ from Problems import *
 from lossCollection import *
 
 from PlotHelper import *
-
+from Logger import Logger
+from Trainer import Trainer
 from torchinfo import summary
-
 
 class Engine:
     def __init__(self, opts=None) -> None:
@@ -27,24 +27,30 @@ class Engine:
         self.device = set_device()
         self.opts = opts
         self.restore_artifacts = {}
-        
+        self.logger = None
         self.dataset = {}
         self.lossCollection = {}
-        self.mlrun = None
+        self.logger = None
         self.artifact_dir = None
-
-        if self.opts['restore'] != '':
-            # restore network structure
-            opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
-            self.opts['nn_opts'].update(opts['nn_opts'])
-
-        self.net = DensePoisson(**(self.opts['nn_opts'])).to(self.device)
-
         self.trainer = None
-        
+    
+    def setup_logger(self):
+        self.logger = Logger(self.opts['logger_opts'])
 
     def setup_problem(self):
         self.pde = create_pde_problem(**(self.opts['pde_opts']))
+    
+    def setup_network(self):
+        # setup network, get network structure if restore
+        # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
+        if self.opts['restore'] != '':
+            opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+            self.opts['nn_opts'].update(opts['nn_opts'])
+
+        self.net = DensePoisson(**(self.opts['nn_opts']),params_dict=self.pde.init_param)
+        self.net.to(self.device)
+        self.net.params_dict.requires_grad_(True)
+
     
     def setup_data(self):
         dsopt = self.opts['dataset_opts']
@@ -59,10 +65,10 @@ class Engine:
         # generate data, might be noisy
         if self.opts['traintype']=="init" or self.opts['traintype']=="forward":
             # for init, use D_init, no noise
-            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.net.init_D)
+            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.init_param)
         else:
             # for basci/inverse, use D_exact
-            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.exact_D)
+            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.exact_param)
 
         if self.opts['noise_opts']['use_noise']:
             self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
@@ -113,11 +119,10 @@ class Engine:
 
 
     def run(self):
-
-        self.trainer = Trainer(self.opts, self.net, self.pde, self.dataset, self.lossCollection)
-        self.trainer.setup_mlflow()
+        print_dict(self.opts)
+        self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.dataset, self.lossCollection, self.logger)
         self.trainer.train()
-        self.trainer.save(self.artifact_dir)
+        self.trainer.save(self.logger.get_dir())
 
 
     def restore(self):
@@ -143,33 +148,31 @@ class Engine:
 
         
 if __name__ == "__main__":
-
+    # test all component
     optobj = Options()
     optobj.parse_args(*sys.argv[1:])
     
     # set seed
-    np.random.seed(optobj.opts['seed'])
-    torch.manual_seed(optobj.opts['seed'])
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(optobj.opts['seed'])
+    set_seed(optobj.opts['seed'])
 
     eng = Engine(optobj.opts)
 
     eng.setup_problem()
+    eng.setup_network()
+    eng.setup_logger()
     eng.setup_data()
+    eng.dataset.to_device(eng.device)
     eng.setup_lossCollection()
     
     summary(eng.net)
 
     eng.run()
 
-    eng.dataset.to_device(eng.device)
+    # eng.dataset.to_device(eng.device)
 
-    ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.artifact_dir)
-    ph.plot_prediction(eng.net)
-    
-    D = eng.net.D.item()
-    ph.plot_variation(eng.net, [D-0.1, D, D+0.1])
+    # ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.logger.get_dir())
+    # ph.plot_prediction(eng.net)
+    # ph.plot_variation(eng.net)
 
     # save command to file
     f = open("commands.txt", "a")
