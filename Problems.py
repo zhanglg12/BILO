@@ -6,8 +6,8 @@ class PoissonProblem():
     def __init__(self, **kwargs):
         super().__init__()
         self.p = 1
-        self.init_param = {'D':2.0}
-        self.exact_param = {'D':1.0}
+        self.init_param = {'D':1.0}
+        self.exact_param = {'D':2.0}
         
 
     def residual(self, nn, x, param:dict):

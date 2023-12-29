@@ -87,8 +87,6 @@ class Trainer:
             fpath = genpath(fname)
             lossObj.save_state(fpath)
         
-        # save options
-        savedict(self.opts, genpath("options.json"))
         
         # save dataset
         self.dataset.save(genpath("dataset.mat"))

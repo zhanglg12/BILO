@@ -44,8 +44,22 @@ class Engine:
         # setup network, get network structure if restore
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
         if self.opts['restore'] != '':
-            opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+            # if is director
+            if os.path.isdir(self.opts['restore']):
+                opts_path = os.path.join(self.opts['restore'], 'options.json')
+                opts = read_json(opts_path)
+                self.restore_artifacts = {fname: os.path.join(self.opts['restore'], fname) for fname in os.listdir(self.opts['restore']) if fname.endswith('.pth')}
+
+            else:
+                #  restore from exp_name:run_name
+                opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+        
+        # udpate options from load, get network structure, catch key error
+        try:
             self.opts['nn_opts'].update(opts['nn_opts'])
+        except KeyError:
+            print('options not found, make sure the network structure is the same')
+            pass
 
         self.net = DensePoisson(**(self.opts['nn_opts']),params_dict=self.pde.init_param)
         self.net.to(self.device)
@@ -119,10 +133,14 @@ class Engine:
 
 
     def run(self):
+
         print_dict(self.opts)
+        
         self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.dataset, self.lossCollection, self.logger)
         self.trainer.train()
         self.trainer.save(self.logger.get_dir())
+        # save options
+        savedict(self.opts, os.path.join(self.logger.get_dir(), 'options.json'))
 
 
     def restore(self):
