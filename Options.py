@@ -21,7 +21,7 @@ default_opts = {
         'rank': 4,
     },
     'pde_opts': {
-        'problem': 'LorenzProblem',
+        'problem': 'Simpleode',
     },
     'nn_opts': {
         'depth': 4,
@@ -35,6 +35,8 @@ default_opts = {
     'dataset_opts': {
         'N_res_train': 100,
         'N_res_test': 100,
+        'N_dat_train': 100,
+        'N_dat_test': 100,
         'datafile': '',
     },
     'train_opts': {
@@ -152,10 +154,6 @@ class Options:
             self.opts['weights']['resgrad'] = 0.0
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
-        
-        if self.opts['pde_opts']['problem'] == 'LorenzProblem':
-            self.opts['nn_opts']['input_dim'] = 1
-            self.opts['nn_opts']['output_dim'] = 3
             
             
         

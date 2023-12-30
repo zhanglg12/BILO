@@ -67,6 +67,9 @@ class Engine:
         else:
             param = self.pde.init_param
 
+        self.opts['nn_opts']['input_dim'] = self.pde.input_dim
+        self.opts['nn_opts']['output_dim'] = self.pde.output_dim
+
         self.net = DensePoisson(**self.opts['nn_opts'],
                                 output_transform = self.pde.output_transform, 
                                 params_dict=param)
@@ -81,21 +84,25 @@ class Engine:
         xtmp = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
         
         self.dataset['x_res_train'] = xtmp.to(self.device)
-        
-
         self.dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1).to(self.device)
+
+        self.dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1).to(self.device)
+        self.dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1).to(self.device)
+
+
+        self.dataset['u_dat_test'] = self.pde.u_exact(self.dataset['x_dat_test'], self.pde.exact_param)
 
         # generate data, might be noisy
         if self.opts['traintype']=="init" or self.opts['traintype']=="forward":
             # for init, use D_init, no noise
-            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.init_param)
+            self.dataset['u_dat_train'] = self.pde.u_exact(self.dataset['x_dat_train'], self.pde.init_param)
         else:
             # for basci/inverse, use D_exact
-            self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.exact_param)
+            self.dataset['u_dat_train'] = self.pde.u_exact(self.dataset['x_dat_train'], self.pde.exact_param)
 
         if self.opts['noise_opts']['use_noise']:
             self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'], self.opts['noise_opts']['length_scale'])
-            self.dataset['u_res_train'] = self.dataset['u_res_train'] + self.dataset['noise'].to(self.device)
+            self.dataset['u_dat_train'] = self.dataset['u_dat_train'] + self.dataset['noise'].to(self.device)
     
     def create_dataset_from_file(self):
         dsopt = self.opts['dataset_opts']

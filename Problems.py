@@ -48,11 +48,58 @@ class PoissonProblem2():
         e = torch.exp(torch.tensor(1.0))
         return 10*( -x + e * (-1.0 + torch.exp(-x)+x)) / (-1.0 + e)
 
+# simple ode for testing
+# https://tutorial.math.lamar.edu/Classes/DE/RealEigenvalues.aspx
+# Example 4
+# x' = [-5 1;4 -2]x x(0) = [1;2]
+# x1 = 3/5 e^(-t)   + 2/5 e^(-6t)
+# x2 = 3/5 e^(-t) 4 - 2/5 e^(-6t)
+# assume A11 unkonwn
+class SimpleODEProblem():
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.input_dim = 1
+        self.output_dim = 2
+        
+        self.init_param = {'a':0.0,}
+        self.exact_param = {'a':-5.0}
+        self.u0 = torch.tensor([1.0, 2.0]).to('cuda')
+        self.output_transform = lambda x, u: self.u0 + u*x
+
+
+    def residual(self, nn, x, param:dict):
+        u_pred = nn.forward(x)  # Assuming x.shape is (batch, 1)
+
+        # Initialize tensors
+        u_t = torch.zeros_like(u_pred)
+        res = torch.zeros_like(u_pred)
+
+        # Compute gradients for each output dimension and adjust dimensions
+        for i in range(u_pred.shape[1]):
+            grad_outputs = torch.ones_like(u_pred[:, i])
+            u_t_i = torch.autograd.grad(u_pred[:, i], x, grad_outputs=grad_outputs, create_graph=True, retain_graph=True)[0]
+            u_t[:, i] = u_t_i[:, 0]  # Adjust dimensions
+
+        # Perform your operations
+        res[:, 0] = u_t[:, 0] - (param['a'] * u_pred[:, 0] + u_pred[:, 1])
+        res[:, 1] = u_t[:, 1] - (4.0 * u_pred[:, 0] - 2.0 * u_pred[:, 1])
+        
+
+        return res, u_pred
+
+
+    def u_exact(self, x, param:dict):
+        v1 = torch.tensor([1,4]).to('cuda')
+        v2 = torch.tensor([-1,1]).to('cuda')
+        y = 3.0/5.0 * torch.exp(-x) * v1  - 2.0/5.0 * torch.exp(-6.0*x) * v2
+        return y
+
 
 class LorenzProblem():
     def __init__(self, **kwargs):
         super().__init__()
-        self.p = 1
+        self.input_dim = 1
+        self.output_dim = 3
         self.init_param = {'sigma':1.0, 'rho':1.0, 'beta':1.0}
         self.exact_param = {'sigma':10.0, 'rho':15.0, 'beta':8.0/3.0}
         self.u0 = torch.tensor([-8.0,  7.0, 27.0]).to('cuda')
@@ -100,12 +147,14 @@ class LorenzProblem():
 
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
-    if problem_type == 'PoissonProblem':
+    if problem_type == 'Poisson':
         return PoissonProblem(**kwargs)
-    elif problem_type == 'PoissonProblem2':
+    elif problem_type == 'Poisson2':
         return PoissonProblem2(**kwargs)
-    elif problem_type == 'LorenzProblem':
+    elif problem_type == 'Lorenz':
         return LorenzProblem(**kwargs)
+    elif problem_type == 'Simpleode':
+        return SimpleODEProblem(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

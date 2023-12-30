@@ -8,7 +8,7 @@ from util import *
 from config import *
 from MlflowHelper import MlflowHelper
 from Problems import *
-
+from Options import *
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
 class DensePoisson(nn.Module):
@@ -70,6 +70,13 @@ class DensePoisson(nn.Module):
         self.param_pde = [self.params_dict[name] for name in self.params_dict.keys()]
 
         self.param_all = self.param_net + self.param_pde
+
+        # initialize weights
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                torch.nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    torch.nn.init.zeros_(m.bias)
     
 
     def embedding(self, x):
@@ -100,10 +107,10 @@ class DensePoisson(nn.Module):
         
 
         X = self.embedding(x)
-        Xtmp = torch.sigmoid(X)
+        Xtmp = torch.tanh(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
-            hidden_output = torch.sigmoid(hidden_layer(Xtmp))
+            hidden_output = torch.tanh(hidden_layer(Xtmp))
             if self.use_resnet:
                 hidden_output += self.residual_layers[i](Xtmp)  # ResNet connection
             Xtmp = hidden_output
@@ -178,22 +185,23 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 # creat a network, compute residual, compute loss, no training
 if __name__ == "__main__":
 
-    nnopts = {'depth':2, 'width':6, 'input_dim':1, 'output_dim':3, 'use_resnet':False, 'with_param':False, 'useFourierFeatures':False}
     
-    # read options from command line key value pairs
-    args = sys.argv[1:]
-    for i in range(0, len(args), 2):
-        key = args[i]
-        val = args[i+1]
-        nnopts[key] = val
+    optobj = Options()
+    optobj.parse_args(*sys.argv[1:])
+    
 
     device = set_device('cuda')
     set_seed(0)
     
     # prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
-    prob = LorenzProblem()
+    prob = create_pde_problem(**optobj.opts['pde_opts'])
 
-    net = DensePoisson(**nnopts,output_transform=prob.output_transform, params_dict=prob.init_param).to(device)
+    optobj.opts['nn_opts']['input_dim'] = prob.input_dim
+    optobj.opts['nn_opts']['output_dim'] = prob.output_dim
+
+    net = DensePoisson(**optobj.opts['nn_opts'],
+                output_transform=prob.output_transform, 
+                params_dict=prob.init_param).to(device)
     
     dataset = {}
     x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
