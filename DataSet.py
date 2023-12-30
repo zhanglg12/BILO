@@ -54,10 +54,12 @@ class DataSet(dict):
     
     def to_torch(self):
         '''convert numpy array to torch tensor
+        skip string
         '''
         print('convert dataset to torch')
         for key, value in self.items():
-            self[key] = torch.tensor(value)
+            if isinstance(value, np.ndarray):
+                self[key] = torch.tensor(value,dtype=torch.float32)
     
     def to_cpu(self):
         '''convert tensor to cpu
@@ -69,7 +71,12 @@ class DataSet(dict):
     def to_device(self, device):
         print(f'move dataset to {device}')
         for key, value in self.items():
-            self[key] = value.to(device)
+            try:
+                self[key] = value.to(device)
+            except AttributeError:
+                # skip non-tensor
+                print(f'skip {key}')
+                pass
             
     
 
@@ -85,7 +92,6 @@ if __name__ == "__main__":
     dataset.to_torch()
     if vars2print is None:
         dataset.printsummary()
-        print(dataset)
     else:
         for var in vars2print:
             print(dataset[var])

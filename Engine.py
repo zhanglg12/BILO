@@ -41,7 +41,8 @@ class Engine:
         self.pde = create_pde_problem(**(self.opts['pde_opts']))
     
     def setup_network(self):
-        # setup network, get network structure if restore
+        '''setup network, get network structure if restore'''
+        
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
         if self.opts['restore'] != '':
             # if is director
@@ -54,25 +55,33 @@ class Engine:
                 #  restore from exp_name:run_name
                 opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
         
-        # udpate options from load, get network structure, catch key error
-        try:
-            self.opts['nn_opts'].update(opts['nn_opts'])
-        except KeyError:
-            print('options not found, make sure the network structure is the same')
-            pass
+            # udpate options from load, get network structure, catch key error
+            try:
+                self.opts['nn_opts'].update(opts['nn_opts'])
+            except KeyError:
+                print('options not found, make sure the network structure is the same')
+                pass
 
-        self.net = DensePoisson(**(self.opts['nn_opts']),params_dict=self.pde.init_param)
+        if self.opts['traintype'] == 'forward':
+            param = self.pde.exact_param
+        else:
+            param = self.pde.init_param
+
+        self.net = DensePoisson(**self.opts['nn_opts'],
+                                output_transform = self.pde.output_transform, 
+                                params_dict=param)
         self.net.to(self.device)
-        self.net.params_dict.requires_grad_(True)
+        
 
-    
-    def setup_data(self):
+    def create_dataset_from_pde(self):
+
         dsopt = self.opts['dataset_opts']
         self.dataset = DataSet()
+
         xtmp = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
         
         self.dataset['x_res_train'] = xtmp.to(self.device)
-        self.dataset['x_res_train'].requires_grad_(True)
+        
 
         self.dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1).to(self.device)
 
@@ -85,8 +94,23 @@ class Engine:
             self.dataset['u_res_train'] = self.pde.u_exact(self.dataset['x_res_train'], self.pde.exact_param)
 
         if self.opts['noise_opts']['use_noise']:
-            self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'],self.opts['noise_opts']['length_scale'])
+            self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'], self.opts['noise_opts']['length_scale'])
             self.dataset['u_res_train'] = self.dataset['u_res_train'] + self.dataset['noise'].to(self.device)
+    
+    def create_dataset_from_file(self):
+        dsopt = self.opts['dataset_opts']
+        self.dataset = DataSet()
+        self.dataset.readmat(dsopt['datafile'])
+        self.dataset.to_device(self.device)
+    
+    def setup_data(self):
+        if self.opts['dataset_opts']['datafile'] == '':
+            print('create dataset from pde')
+            self.create_dataset_from_pde()
+        else:
+            print('create dataset from file')
+            self.create_dataset_from_file()
+
     
     def make_prediction(self):
         self.dataset['u_res_test'] = self.net(self.dataset['x_res_test'])
@@ -100,6 +124,8 @@ class Engine:
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
             
+            
+
         
         elif self.opts['traintype'] == 'forward':
             # fast forward solve using resdual, or together with data loss
@@ -179,6 +205,7 @@ if __name__ == "__main__":
     eng.setup_network()
     eng.setup_logger()
     eng.setup_data()
+
     eng.dataset.to_device(eng.device)
     eng.setup_lossCollection()
     
@@ -186,14 +213,14 @@ if __name__ == "__main__":
 
     eng.run()
 
-    # eng.dataset.to_device(eng.device)
+    eng.dataset.to_device(eng.device)
 
-    # ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.logger.get_dir())
-    # ph.plot_prediction(eng.net)
+    ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.logger.get_dir())
+    ph.plot_prediction2(eng.net, eng.dataset)
     # ph.plot_variation(eng.net)
 
     # save command to file
-    f = open("commands.txt", "a")
-    f.write(' '.join(sys.argv))
-    f.write('\n')
-    f.close()
+    # f = open("commands.txt", "a")
+    # f.write(' '.join(sys.argv))
+    # f.write('\n')
+    # f.close()

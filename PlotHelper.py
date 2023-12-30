@@ -86,6 +86,33 @@ class PlotHelper:
         print(f'{fname} saved to {fpath}')
      
     @catch_plot_errors
+    def plot_prediction2(self, net, dataset):
+        x_dat_test = self.dataset['x_dat_test']
+        u_dat_test = self.dataset['u_dat_test']
+
+        with torch.no_grad():
+            upred = net(x_dat_test)
+        
+        # move to cpu
+        x_dat_test = x_dat_test.cpu().detach().numpy()
+        upred = upred.cpu().detach().numpy()
+        u_test = u_dat_test.cpu().detach().numpy()
+
+        # visualize the results
+        fig, ax = plt.subplots()
+        
+        # plot nn prediction
+        ax.plot(x_dat_test, upred, label='pred')
+        # plot exact solution
+        ax.plot(x_dat_test, u_test, label='test',linestyle='--')
+
+        if self.opts['yessave']:
+                self.save(f'fig_pred_xtest.png', fig)
+
+        return fig, ax
+
+
+    @catch_plot_errors
     def plot_prediction(self, net):
         x_test = self.dataset['x_res_test']
 

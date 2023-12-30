@@ -12,7 +12,10 @@ from Problems import *
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
 class DensePoisson(nn.Module):
-    def __init__(self, depth, width, use_resnet=False, with_param=False, params_dict=None, useFourierFeatures=False):
+    def __init__(self, depth, width, input_dim=1, output_dim=1, 
+                output_transform=lambda x,u:u,
+                use_resnet=False, with_param=False, params_dict=None, 
+                useFourierFeatures=False):
         super().__init__()
         
         
@@ -20,6 +23,7 @@ class DensePoisson(nn.Module):
         self.width = width
         self.use_resnet = use_resnet
         self.with_param = with_param # if True, then the pde parameter is part of the network
+        self.output_transform = output_transform # transform the output of the network, default is identity
         self.useFourierFeatures = useFourierFeatures
 
         # convert float to tensor of size (1,1)
@@ -30,15 +34,15 @@ class DensePoisson(nn.Module):
 
         if self.useFourierFeatures:
             print('Using Fourier Features')
-            self.fflayer = nn.Linear(1, width)
+            self.fflayer = nn.Linear(input_dim, width)
             self.fflayer.requires_grad = False
             self.input_layer = nn.Linear(width, width)
         else:
-            self.input_layer = nn.Linear(1, width)
+            self.input_layer = nn.Linear(input_dim, width)
 
         # depth = input + hidden + output
         self.hidden_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
-        self.output_layer = nn.Linear(width, 1)
+        self.output_layer = nn.Linear(width, output_dim)
         
         if use_resnet:
             self.residual_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
@@ -94,20 +98,18 @@ class DensePoisson(nn.Module):
         
     def forward(self, x):
         
-        # fbc = torch.sin(torch.pi * x) # transformation of nn to impose boundary condition
-        fbc = x * (1 - x) 
 
-        # sin transformation of embedding
-        x = self.embedding(x)
-        x = torch.sigmoid(x)
+        X = self.embedding(x)
+        Xtmp = torch.sigmoid(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
-            hidden_output = torch.sigmoid(hidden_layer(x))
+            hidden_output = torch.sigmoid(hidden_layer(Xtmp))
             if self.use_resnet:
-                hidden_output += self.residual_layers[i](x)  # ResNet connection
-            x = hidden_output
+                hidden_output += self.residual_layers[i](Xtmp)  # ResNet connection
+            Xtmp = hidden_output
         
-        u = (self.output_layer(x)) * fbc
+        u = self.output_layer(Xtmp)
+        u = self.output_transform(x, u)
         return u
     
     def reset_weights(self):
@@ -172,11 +174,11 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
     return net, opts
 
 
-# set up simple test
+# simple test of the network
 # creat a network, compute residual, compute loss, no training
 if __name__ == "__main__":
 
-    nnopts = {'depth':2, 'width':6, 'use_resnet':False, 'with_param':False, 'params_dict':{'D':1.0},'useFourierFeatures':False}
+    nnopts = {'depth':2, 'width':6, 'input_dim':1, 'output_dim':3, 'use_resnet':False, 'with_param':False, 'useFourierFeatures':False}
     
     # read options from command line key value pairs
     args = sys.argv[1:]
@@ -186,9 +188,12 @@ if __name__ == "__main__":
         nnopts[key] = val
 
     device = set_device('cuda')
+    set_seed(0)
     
-    net = DensePoisson(**nnopts).to(device)
-    prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
+    # prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
+    prob = LorenzProblem()
+
+    net = DensePoisson(**nnopts,output_transform=prob.output_transform, params_dict=prob.init_param).to(device)
     
     dataset = {}
     x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
@@ -198,6 +203,6 @@ if __name__ == "__main__":
 
     # print 2 norm of res
     print(torch.norm(res))
-    print(torch.norm(y-u_pred))
+    
 
     

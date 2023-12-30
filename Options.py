@@ -21,11 +21,13 @@ default_opts = {
         'rank': 4,
     },
     'pde_opts': {
-        'problem': 'PoissonProblem',
+        'problem': 'LorenzProblem',
     },
     'nn_opts': {
         'depth': 4,
         'width': 64,
+        'input_dim': 1,
+        'output_dim': 1,
         'use_resnet': False,
         'with_param': False,
         'useFourierFeatures':False,
@@ -33,6 +35,7 @@ default_opts = {
     'dataset_opts': {
         'N_res_train': 100,
         'N_res_test': 100,
+        'datafile': '',
     },
     'train_opts': {
         'max_iter': 100000,
@@ -144,10 +147,16 @@ class Options:
             self.opts['nn_opts']['width'] = 2
             self.opts['train_opts']['max_iter'] = 10
             self.opts['train_opts']['print_every'] = 1
+        
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = 0.0
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
+        
+        if self.opts['pde_opts']['problem'] == 'LorenzProblem':
+            self.opts['nn_opts']['input_dim'] = 1
+            self.opts['nn_opts']['output_dim'] = 3
+            
             
         
         

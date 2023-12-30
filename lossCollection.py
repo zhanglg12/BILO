@@ -41,6 +41,13 @@ class lossCollection:
             if self.loss_weight[k] is not None and self.loss_weight[k] > 0:
                 self.loss_active.append(k)
 
+        # if residual gradient loss is active, we need to compute residual gradient
+        if 'res' in self.loss_active:
+            self.dataset['x_res_train'].requires_grad_(True)
+        
+        for p in self.param:
+            p.requires_grad_(True)
+
     
         self.wloss_comp = {} # component of each loss, weighted
         self.loss_val = None # total loss for backprop
@@ -74,8 +81,8 @@ class lossCollection:
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
-        self.u_pred = self.net(self.dataset['x_res_train'])
-        return mse(self.u_pred, self.dataset['u_res_train'])
+        self.u_pred = self.net(self.dataset['x_dat_train'])
+        return mse(self.u_pred, self.dataset['u_dat_train'])
     
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight

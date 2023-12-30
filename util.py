@@ -1,6 +1,9 @@
 import torch
 import numpy as np
 import json
+import inspect
+import types
+
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -10,6 +13,9 @@ class MyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, types.FunctionType):
+            # for simple lambda function
+            return inspect.getsource(obj)
         else:
             return super(MyEncoder, self).default(obj)
 
@@ -21,10 +27,11 @@ def read_json(path):
         return json.load(f)
         
 def mse(x, y = 0):
+    # mean square error
     return torch.mean((x - y)**2)
 
 def print_dict(d):
-    print(json.dumps(d, indent=4,sort_keys=True))
+    print(json.dumps(d, indent=4,cls=MyEncoder,sort_keys=True))
 
 def set_seed(seed):
     np.random.seed(seed)
