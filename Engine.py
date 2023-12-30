@@ -76,48 +76,23 @@ class Engine:
         self.net.to(self.device)
         
 
-    def create_dataset_from_pde(self):
-
-        dsopt = self.opts['dataset_opts']
-        self.dataset = DataSet()
-
-        xtmp = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
-        
-        self.dataset['x_res_train'] = xtmp.to(self.device)
-        self.dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1).to(self.device)
-
-        self.dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1).to(self.device)
-        self.dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1).to(self.device)
-
-
-        self.dataset['u_dat_test'] = self.pde.u_exact(self.dataset['x_dat_test'], self.pde.exact_param)
-
-        # generate data, might be noisy
-        if self.opts['traintype']=="init" or self.opts['traintype']=="forward":
-            # for init, use D_init, no noise
-            self.dataset['u_dat_train'] = self.pde.u_exact(self.dataset['x_dat_train'], self.pde.init_param)
-        else:
-            # for basci/inverse, use D_exact
-            self.dataset['u_dat_train'] = self.pde.u_exact(self.dataset['x_dat_train'], self.pde.exact_param)
-
-        if self.opts['noise_opts']['use_noise']:
-            self.dataset['noise'] = generate_grf(xtmp, self.opts['noise_opts']['variance'], self.opts['noise_opts']['length_scale'])
-            self.dataset['u_dat_train'] = self.dataset['u_dat_train'] + self.dataset['noise'].to(self.device)
-    
     def create_dataset_from_file(self):
         dsopt = self.opts['dataset_opts']
         self.dataset = DataSet()
         self.dataset.readmat(dsopt['datafile'])
-        self.dataset.to_device(self.device)
+        
     
     def setup_data(self):
+        # setup data from file or from PDE
         if self.opts['dataset_opts']['datafile'] == '':
+            # when exact pde solution is avialble, use it to create dataset
             print('create dataset from pde')
-            self.create_dataset_from_pde()
+            dataset = create_dataset_from_pde(prob, self.opts['dataset_opts'], self.opts['noise_opts'])
         else:
             print('create dataset from file')
             self.create_dataset_from_file()
 
+        self.dataset.to_device(self.device)
     
     def make_prediction(self):
         self.dataset['u_res_test'] = self.net(self.dataset['x_res_test'])
@@ -131,8 +106,6 @@ class Engine:
             loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
             self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
             
-            
-
         
         elif self.opts['traintype'] == 'forward':
             # fast forward solve using resdual, or together with data loss

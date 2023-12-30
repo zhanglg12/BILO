@@ -41,13 +41,20 @@ default_opts = {
     },
     'train_opts': {
         'max_iter': 100000,
-        'lr': 0.001,
         'tolerance': 1e-6,
         'print_every': 20,
         'patience': 1000,
         'delta_loss':1e-5,
         'monitor_loss':True,
         'burnin':1000,
+    },
+    'lr' : 1e-3,
+    'optimizer': 'adam',
+    'adam_opts': {
+    
+    },
+    'lbfgs_opts': {
+        
     },
     'noise_opts':{
         'use_noise': False,

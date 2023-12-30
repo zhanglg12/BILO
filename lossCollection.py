@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 this class handle the loss function and computing gradient
 net = neural net class
@@ -21,9 +22,13 @@ class lossCollection:
         self.net = net
         self.pde = pde
         self.dataset = dataset
-        self.optimizer = optimizer(param)
         self.param = param
 
+        if optimizer == 'lbfgs':
+            self.optimizer = torch.optim.LBFGS(self.param, **opts['lbfgs_opts'])
+        else:
+            self.optimizer = torch.optim.Adam(self.param, **opts['adam_opts'])
+        
         # intermediate results for residual loss
         self.res = None
         self.res_D = None
@@ -96,16 +101,33 @@ class lossCollection:
         self.loss_val = weighted_sum
 
     def step(self):
-        self.optimizer.zero_grad()
-        # 1 step of gradient descent
-        grads = torch.autograd.grad(self.loss_val, self.param, create_graph=True, allow_unused=True)
-        for param, grad in zip(self.param, grads):
-            param.grad = grad
-        self.optimizer.step()
-    
+        if isinstance(self.optimizer, torch.optim.LBFGS):
+            # LBFGS step
+            self.optimizer.step(self.get_loss_closure())
+        else:
+            # existing step code for other optimizers
+            self.optimizer.zero_grad()
+            # 1 step of gradient descent
+            grads = torch.autograd.grad(self.loss_val, self.param, create_graph=True, allow_unused=True)
+            for param, grad in zip(self.param, grads):
+                param.grad = grad
+            self.optimizer.step()
+        
     def save_state(self, fpath):
         # save optimizer state
         torch.save(self.optimizer.state_dict(), fpath)
+    
+    def get_loss_closure(self):
+        """
+        Closure function for LBFGS optimizer.
+        """
+        def closure():
+            self.optimizer.zero_grad()
+            self.getloss()
+            self.loss_val.backward()
+            return self.loss_val
+        return closure
+
 
 
 def setup_dataset(pde, noise_opts, ds_opts):
@@ -171,5 +193,75 @@ class EarlyStopping:
         return False
 
 
-# if __name__ == "__main__":
-#     # test to check if the loss can be computed
+if __name__ == "__main__":
+
+
+
+    
+    # # Define a simple linear neural network
+    # class SimpleLinearNet(nn.Module):
+    #     def __init__(self):
+    #         super(SimpleLinearNet, self).__init__()
+    #         self.linear = nn.Linear(1, 1, bias=False)  # Linear model with one input and one output
+
+    #     def forward(self, x):
+    #         return self.linear(x)
+
+    # # Define a simple PDE for testing
+    # class SimplePDE:
+    #     def residual(self, net, x, params):
+    #         u_pred = net(x)
+    #         grad = torch.autograd.grad(u_pred, x, create_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
+    #         res = grad - 1.0
+    #         return res, u_pred
+
+    # Synthetic data generation
+    # x_res_train = torch.randn(10, 1)  # 10 random points for residual training
+    # x_dat_train = torch.randn(10, 1)  # 10 random points for data training
+    # u_dat_train = 1.0 * x_dat_train + 1.0  # Assuming a true linear relation for synthetic data
+
+    # # Initialize the neural network and parameters
+    # net = SimpleLinearNet()
+    # params = list(net.parameters())
+
+    import sys
+    from Options import *
+    from DensePoisson import *
+    from Problems import *
+
+
+    optobj = Options()
+    optobj.parse_args(*sys.argv[1:])
+    
+    device = set_device('cuda')
+    set_seed(0)
+    
+    # prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
+    prob = create_pde_problem(**optobj.opts['pde_opts'])
+
+    optobj.opts['nn_opts']['input_dim'] = prob.input_dim
+    optobj.opts['nn_opts']['output_dim'] = prob.output_dim
+
+    net = DensePoisson(**optobj.opts['nn_opts'],
+                output_transform=prob.output_transform, 
+                params_dict=prob.init_param).to(device)
+
+    dataset = create_dataset_from_pde(prob, optobj.opts['dataset_opts'], optobj.opts['noise_opts'])
+    dataset.to_device(device)
+
+    dataset['u_dat_train'] = dataset['u_exact_dat_train']
+
+    params = list(net.parameters())
+    
+    # Initialize the loss collection
+    loss_collection = lossCollection(net, prob, dataset, params, optobj.opts['optimizer'], optobj.opts)
+
+    # Compute loss and perform a gradient descent step
+    loss_collection.getloss()
+    loss_collection.step()
+
+    # print the loss
+    print(loss_collection.loss_val)
+    print(loss_collection.wloss_comp)
+
+
