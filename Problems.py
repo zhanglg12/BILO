@@ -108,15 +108,11 @@ class LorenzProblem():
         super().__init__()
         self.input_dim = 1
         self.output_dim = 3
-        # self.init_param = {'sigma':1.0, 'rho':1.0, 'beta':1.0}
-        # self.exact_param = {'sigma':10.0, 'rho':15.0, 'beta':8.0/3.0}
-        # self.u0 = torch.tensor([-8.0,  7.0, 27.0]).to('cuda')
-
-        self.init_param = {'sigma':1.0, 'rho':1.0, 'beta':1.0}
-        self.exact_param = {'sigma':10.0, 'rho':28.0, 'beta':8.0/3.0}
         
-        # define ic transformation
-        u0 = torch.tensor([1.0,  0.0, 0.0])
+        self.init_param = {'sigma':1.0, 'rho':1.0, 'beta':1.0}
+        self.exact_param = {'sigma':10.0, 'rho':15.0, 'beta':8.0/3.0}
+        u0 = torch.tensor([-8.0,  7.0, 27.0])
+
         self.output_transform = torch.nn.Module()
         self.output_transform.register_buffer('u0', u0)
         self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x

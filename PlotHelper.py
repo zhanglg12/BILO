@@ -103,8 +103,11 @@ class PlotHelper:
         
         # plot nn prediction
         ax.plot(x_dat_test, upred, label='pred')
+
         # plot exact solution
         ax.plot(x_dat_test, u_test, label='test',linestyle='--')
+        # add legend
+        
 
         if self.opts['yessave']:
                 self.save(f'fig_pred_xtest.png', fig)

@@ -13,6 +13,7 @@ data loss: MSE of data
 
 from DataSet import DataSet
 from util import *
+from PyTorch_LBFGS.functions.LBFGS import FullBatchLBFGS
 
 class lossCollection:
     # loss, parameter, and optimizer
@@ -25,7 +26,8 @@ class lossCollection:
         self.param = param
 
         if optimizer == 'lbfgs':
-            self.optimizer = torch.optim.LBFGS(self.param, **optim_opts)
+            # self.optimizer = torch.optim.LBFGS(self.param, lr=1.0, line_search_fn = 'strong_wolfe', **optim_opts)
+            self.optimizer = FullBatchLBFGS(self.param, lr=1.0)
         else:
             self.optimizer = torch.optim.Adam(self.param, **optim_opts)
         
@@ -104,6 +106,14 @@ class lossCollection:
         if isinstance(self.optimizer, torch.optim.LBFGS):
             # LBFGS step
             self.optimizer.step(self.get_loss_closure())
+        elif isinstance(self.optimizer, FullBatchLBFGS):
+            # LBFGS step
+            def closure():
+                self.optimizer.zero_grad()
+                self.getloss()
+                return self.loss_val
+            tmp_option = {'closure': closure, 'current_loss': self.loss_val}
+            self.optimizer.step(tmp_option)
         else:
             # existing step code for other optimizers
             self.optimizer.zero_grad()

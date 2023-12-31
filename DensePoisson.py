@@ -74,11 +74,11 @@ class DensePoisson(nn.Module):
 
 
         # initialize weights
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                torch.nn.init.xavier_uniform_(m.weight)
-                if m.bias is not None:
-                    torch.nn.init.zeros_(m.bias)
+        # for m in self.modules():
+        #     if isinstance(m, nn.Linear):
+        #         torch.nn.init.xavier_uniform_(m.weight)
+        #         if m.bias is not None:
+        #             torch.nn.init.zeros_(m.bias)
     
 
     def embedding(self, x):
