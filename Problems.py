@@ -65,8 +65,12 @@ class SimpleODEProblem():
         
         self.init_param = {'a':0.0,}
         self.exact_param = {'a':-5.0}
-        self.u0 = torch.tensor([1.0, 2.0]).to('cuda')
-        self.output_transform = lambda x, u: self.u0 + u*x
+        u0 = torch.tensor([1.0, 2.0])
+        
+        # this allow u0 follow the device of Neuralnet
+        self.output_transform = torch.nn.Module()
+        self.output_transform.register_buffer('u0', u0)
+        self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
 
 
     def residual(self, nn, x, param:dict):
@@ -91,8 +95,10 @@ class SimpleODEProblem():
 
 
     def u_exact(self, x, param:dict):
-        v1 = torch.tensor([1,4]).to('cuda')
-        v2 = torch.tensor([-1,1]).to('cuda')
+        # get device of x
+        device = x.device
+        v1 = torch.tensor([1,4]).to(device)
+        v2 = torch.tensor([-1,1]).to(device)
         y = 3.0/5.0 * torch.exp(-x) * v1  - 2.0/5.0 * torch.exp(-6.0*x) * v2
         return y
 
@@ -108,11 +114,12 @@ class LorenzProblem():
 
         self.init_param = {'sigma':1.0, 'rho':1.0, 'beta':1.0}
         self.exact_param = {'sigma':10.0, 'rho':28.0, 'beta':8.0/3.0}
-        self.u0 = torch.tensor([1.0,  0.0, 0.0]).to('cuda')
-
-
-
-        self.output_transform = lambda x, u: self.u0 + u*x
+        
+        # define ic transformation
+        u0 = torch.tensor([1.0,  0.0, 0.0])
+        self.output_transform = torch.nn.Module()
+        self.output_transform.register_buffer('u0', u0)
+        self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
         
 
     def residual(self, nn, x, param:dict):

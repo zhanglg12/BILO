@@ -71,7 +71,7 @@ class Engine:
         self.opts['nn_opts']['output_dim'] = self.pde.output_dim
 
         self.net = DensePoisson(**self.opts['nn_opts'],
-                                output_transform = self.pde.output_transform, 
+                                output_transform=self.pde.output_transform,
                                 params_dict=param)
         self.net.to(self.device)
         
@@ -87,10 +87,18 @@ class Engine:
         if self.opts['dataset_opts']['datafile'] == '':
             # when exact pde solution is avialble, use it to create dataset
             print('create dataset from pde')
-            dataset = create_dataset_from_pde(prob, self.opts['dataset_opts'], self.opts['noise_opts'])
+            self.dataset = create_dataset_from_pde(self.pde, self.opts['dataset_opts'], self.opts['noise_opts'])
+
+            # what is used for training
+            if self.opts['traintype'] == 'init':
+                self.dataset['u_dat_train'] = self.dataset['u_init_dat_train']
+            else:
+                self.dataset['u_dat_train'] = self.dataset['u_exact_dat_train']
         else:
             print('create dataset from file')
             self.create_dataset_from_file()
+
+        
 
         self.dataset.to_device(self.device)
     
@@ -99,34 +107,38 @@ class Engine:
         
 
     def setup_lossCollection(self):
+        
+
+        which_optim = self.opts['optimizer']
+        optim_opts = self.opts[f'{which_optim}_opts']
 
         if self.opts['traintype'] == 'basic':
             # basic method of solving inverse problem, optimize weight and parameter
             # no resgrad, residual loss and data loss only, 
-            loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
-            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, list(self.net.parameters()), optim.Adam, loss_pde_opts)
+            loss_weights ={'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}
+            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_all, which_optim, optim_opts, loss_weights)
             
         
         elif self.opts['traintype'] == 'forward':
             # fast forward solve using resdual, or together with data loss
-            loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}}
-            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            loss_weights ={'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}
+            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_weights)
         
         elif self.opts['traintype'] == 'init':
             # use all 3 losses
-            loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],
+            loss_weights = {'res':self.opts['weights']['res'],
             'resgrad':self.opts['weights']['resgrad'],
             'data':self.opts['weights']['data'],
-            'paramgrad':self.opts['weights']['paramgrad']}}
+            'paramgrad':self.opts['weights']['paramgrad']}
 
-            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_weights)
 
         elif self.opts['traintype'] == 'inverse':
-            loss_pde_opts = {'weights':{'res':self.opts['weights']['res'],'resgrad':self.opts['weights']['resgrad'],'data':self.opts['weights']['data']}}
-            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, optim.Adam, loss_pde_opts)
+            loss_pde_weights ={'res':self.opts['weights']['res'],'resgrad':self.opts['weights']['resgrad']}
+            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_pde_weights)
 
-            loss_data_opts = {'weights':{'data':self.opts['weights']['data']}}
-            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, optim.Adam, loss_data_opts)
+            loss_data_weights ={'data':self.opts['weights']['data']}
+            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, which_optim, optim_opts, loss_data_weights)
         else:
             raise ValueError(f'train type {self.opts["traintype"]} not supported')
         

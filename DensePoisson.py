@@ -13,9 +13,10 @@ from Options import *
 # the PDE parameter is also part of the network
 class DensePoisson(nn.Module):
     def __init__(self, depth, width, input_dim=1, output_dim=1, 
-                output_transform=lambda x,u:u,
+                output_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
-                useFourierFeatures=False):
+                useFourierFeatures=False,
+                ):
         super().__init__()
         
         
@@ -71,6 +72,7 @@ class DensePoisson(nn.Module):
 
         self.param_all = self.param_net + self.param_pde
 
+
         # initialize weights
         for m in self.modules():
             if isinstance(m, nn.Linear):
@@ -105,7 +107,6 @@ class DensePoisson(nn.Module):
         
     def forward(self, x):
         
-
         X = self.embedding(x)
         Xtmp = torch.tanh(X)
         

@@ -16,18 +16,18 @@ from util import *
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde, dataset, param, optimizer, opts):
+    def __init__(self, net, pde, dataset, param, optimizer, optim_opts, loss_weigt_dict):
 
-        self.opts = opts
+        
         self.net = net
         self.pde = pde
         self.dataset = dataset
         self.param = param
 
         if optimizer == 'lbfgs':
-            self.optimizer = torch.optim.LBFGS(self.param, **opts['lbfgs_opts'])
+            self.optimizer = torch.optim.LBFGS(self.param, **optim_opts)
         else:
-            self.optimizer = torch.optim.Adam(self.param, **opts['adam_opts'])
+            self.optimizer = torch.optim.Adam(self.param, **optim_opts)
         
         # intermediate results for residual loss
         self.res = None
@@ -38,7 +38,7 @@ class lossCollection:
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
         
-        self.loss_weight = opts['weights']
+        self.loss_weight = loss_weigt_dict # dict of active loss: weight
         
         # collect keys with positive weights
         self.loss_active = []
@@ -195,34 +195,6 @@ class EarlyStopping:
 
 if __name__ == "__main__":
 
-
-
-    
-    # # Define a simple linear neural network
-    # class SimpleLinearNet(nn.Module):
-    #     def __init__(self):
-    #         super(SimpleLinearNet, self).__init__()
-    #         self.linear = nn.Linear(1, 1, bias=False)  # Linear model with one input and one output
-
-    #     def forward(self, x):
-    #         return self.linear(x)
-
-    # # Define a simple PDE for testing
-    # class SimplePDE:
-    #     def residual(self, net, x, params):
-    #         u_pred = net(x)
-    #         grad = torch.autograd.grad(u_pred, x, create_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-    #         res = grad - 1.0
-    #         return res, u_pred
-
-    # Synthetic data generation
-    # x_res_train = torch.randn(10, 1)  # 10 random points for residual training
-    # x_dat_train = torch.randn(10, 1)  # 10 random points for data training
-    # u_dat_train = 1.0 * x_dat_train + 1.0  # Assuming a true linear relation for synthetic data
-
-    # # Initialize the neural network and parameters
-    # net = SimpleLinearNet()
-    # params = list(net.parameters())
 
     import sys
     from Options import *
