@@ -17,15 +17,16 @@ from PyTorch_LBFGS.functions.LBFGS import FullBatchLBFGS
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde, dataset, param, optimizer, optim_opts, loss_weigt_dict):
+    def __init__(self, net, pde, dataset, param, optimizer_name, optim_opts, loss_weigt_dict):
 
         
         self.net = net
         self.pde = pde
         self.dataset = dataset
         self.param = param
+        self.optimizer_name = optimizer_name
 
-        if optimizer == 'lbfgs':
+        if optimizer_name == 'lbfgs':
             # self.optimizer = torch.optim.LBFGS(self.param, lr=1.0, line_search_fn = 'strong_wolfe', **optim_opts)
             self.optimizer = FullBatchLBFGS(self.param, lr=1.0)
         else:
@@ -33,9 +34,8 @@ class lossCollection:
         
         # intermediate results for residual loss
         self.res = None
-        self.res_D = None
+        self.grad_res_params = {} # gradient of residual w.r.t. parameter
         self.u_pred = None
-        self.u_D = None
 
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
@@ -67,8 +67,9 @@ class lossCollection:
 
     def computeResidualGrad(self):
         # compute gradient of residual w.r.t. parameter
-        self.res_D = torch.autograd.grad(self.res, self.net.params_dict['D'], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
-        return self.res_D
+        for pname, pvalue in self.net.params_dict.items():
+            self.grad_res_params[pname] = torch.autograd.grad(self.res, pvalue, create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+        return self.grad_res_params
         
 
     def resloss(self):
@@ -79,12 +80,22 @@ class lossCollection:
     def resgradloss(self):
         # compute gradient of residual w.r.t. parameter
         self.computeResidualGrad()
-        return mse(self.res_D)
-    
+        
+        # compute the sum of squares of grad-res w.r.t parameters
+        values = torch.stack(list(self.grad_res_params.values()))
+        sum_squares = torch.sum(torch.pow(values, 2))
+        
+        return sum_squares
+
+            
+        
+    # to prevent derivative of u w.r.t. parameter to be 0
+    # for now, just fix the weight of the embedding.
     def paramgradloss(self):
-        # derivative of u w.r.t. D
-        # penalty term to keep away from 0
-        return torch.exp(-mse(self.u_D))
+        pass
+    #     # derivative of u w.r.t. D
+    #     # penalty term to keep away from 0
+    #     return torch.exp(-mse(self.u_D))
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss

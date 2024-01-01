@@ -45,10 +45,6 @@ class DensePoisson(nn.Module):
         self.hidden_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
         self.output_layer = nn.Linear(width, output_dim)
         
-        if use_resnet:
-            self.residual_layers = nn.ModuleList([nn.Linear(width, width) for _ in range(depth - 2)])
-        
-        
 
         # for with_param version, pde parameter is not part of the network (but part of module)
         # for inverse problem, create embedding layer for pde parameter
@@ -111,9 +107,10 @@ class DensePoisson(nn.Module):
         Xtmp = torch.tanh(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
-            hidden_output = torch.tanh(hidden_layer(Xtmp))
+            hidden_output = hidden_layer(Xtmp)
             if self.use_resnet:
-                hidden_output += self.residual_layers[i](Xtmp)  # ResNet connection
+                hidden_output += Xtmp  # ResNet connection
+            hidden_output = torch.tanh(hidden_output)
             Xtmp = hidden_output
         
         u = self.output_layer(Xtmp)

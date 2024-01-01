@@ -29,7 +29,7 @@ default_opts = {
         'input_dim': 1,
         'output_dim': 1,
         'use_resnet': False,
-        'with_param': False,
+        'with_param': True,
         'useFourierFeatures':False,
     },
     'dataset_opts': {
@@ -42,7 +42,7 @@ default_opts = {
     'train_opts': {
         'max_iter': 100000,
         'tolerance': 1e-6,
-        'print_every': 20,
+        'print_every': 50,
         'patience': 1000,
         'delta_loss':1e-5,
         'monitor_loss':True,

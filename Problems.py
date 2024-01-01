@@ -157,16 +157,74 @@ class LorenzProblem():
     def u_exact(self, x, param:dict):
         pass
 
+class DampedOsc():
+    ''' Based on Supporting Information for:
+    Discovering governing equations from data: Sparse identification of nonlinear dynamical systems
+    Steven L. Brunton1, Joshua L. Proctor2, J. Nathan Kutz
+    damped oscillator nonlinear
+    dxdt = a11  x^3 + a12  y^3
+    dydt = -2   x^3 + -0.1   y^3
+    a11 = -0.1;
+    a12 = 2;
+    t0 = 0;
+    tstop = 25
+    y0 = [2 0];
+    '''
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.input_dim = 1
+        self.output_dim = 2
+        
+        # self.init_param = {'a11':-1.0, 'a12':1.0}
+        # self.exact_param = {'a11':-0.1, 'a12':2.0}
+
+        self.init_param = {'a11':-1.0, 'a12':1.0}
+        self.exact_param = {'a11':-1.0, 'a12':1.0}
+        u0 = torch.tensor([2.0, 0.0])
+
+        self.output_transform = torch.nn.Module()
+        self.output_transform.register_buffer('u0', u0)
+        self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
+        
+
+    def residual(self, nn, x, param:dict):
+        u_pred = nn.forward(x)  # Assuming x.shape is (batch, 1)
+
+        # Initialize tensors
+        u_t = torch.zeros_like(u_pred)
+        res = torch.zeros_like(u_pred)
+
+        # Compute gradients for each output dimension and adjust dimensions
+        for i in range(u_pred.shape[1]):
+            grad_outputs = torch.ones_like(u_pred[:, i])
+            u_t_i = torch.autograd.grad(u_pred[:, i], x, grad_outputs=grad_outputs, create_graph=True, retain_graph=True)[0]
+            u_t[:, i] = u_t_i[:, 0]  # Adjust dimensions
+
+        # Perform your operations
+        res[:, 0] = u_t[:, 0] - (param['a11'] * u_pred[:, 0]**3 + param['a12'] * u_pred[:, 1]**3)
+        res[:, 1] = u_t[:, 1] - (-2.0 * u_pred[:, 0]**3 - 0.1 * u_pred[:, 1]**3)
+
+        return res, u_pred
+
+    def f(self, x):
+        pass
+
+    def u_exact(self, x, param:dict):
+        pass
+
+
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
-    if problem_type == 'Poisson':
+    if problem_type == 'poisson':
         return PoissonProblem(**kwargs)
-    elif problem_type == 'Poisson2':
+    elif problem_type == 'poisson2':
         return PoissonProblem2(**kwargs)
-    elif problem_type == 'Lorenz':
+    elif problem_type == 'lorenz':
         return LorenzProblem(**kwargs)
-    elif problem_type == 'Simpleode':
+    elif problem_type == 'simpleode':
         return SimpleODEProblem(**kwargs)
+    elif problem_type == 'dampedosc':
+        return DampedOsc(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

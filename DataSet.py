@@ -66,7 +66,8 @@ class DataSet(dict):
         '''
         print('move dataset to cpu')
         for key, value in self.items():
-            self[key] = value.cpu().detach()
+            if isinstance(value, torch.Tensor):
+                self[key] = value.cpu().detach()
     
     def to_device(self, device):
         print(f'move dataset to {device}')

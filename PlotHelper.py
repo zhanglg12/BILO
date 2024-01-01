@@ -101,16 +101,48 @@ class PlotHelper:
         # visualize the results
         fig, ax = plt.subplots()
         
-        # plot nn prediction
-        ax.plot(x_dat_test, upred, label='pred')
+        # Get the number of dimensions
+        d = upred.shape[1]
+        # get color cycle
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        # Plot each dimension
+        for i in range(d):
+            color = color_cycle[i % len(color_cycle)]
+            ax.plot(x_dat_test, upred[:, i], label=f'pred {chr(120 + i)}', color=color)
+            ax.plot(x_dat_test, u_test[:, i], label=f'test {chr(120 + i)}', linestyle='--', color=color)
 
-        # plot exact solution
-        ax.plot(x_dat_test, u_test, label='test',linestyle='--')
-        # add legend
-        
+        ax.legend()
 
         if self.opts['yessave']:
                 self.save(f'fig_pred_xtest.png', fig)
+
+        return fig, ax
+    
+
+    @catch_plot_errors
+    def plot_prediction_2dtraj(self, net, dataset):
+        x_dat_test = self.dataset['x_dat_test']
+        u_dat_test = self.dataset['u_dat_test']
+
+        with torch.no_grad():
+            upred = net(x_dat_test)
+        
+        # move to cpu
+        x_dat_test = x_dat_test.cpu().detach().numpy()
+        upred = upred.cpu().detach().numpy()
+        u_test = u_dat_test.cpu().detach().numpy()
+
+        # visualize the results
+        fig, ax = plt.subplots()
+        
+        # plot nn prediction, upred is n-by-2 trajectory
+        ax.plot(upred[:,0], upred[:,1], label='pred')
+        ax.plot(u_test[:,0], u_test[:,1], label='test',linestyle='--')
+        
+        ax.legend()
+
+        if self.opts['yessave']:
+                self.save(f'fig_pred_2dtraj.png', fig)
 
         return fig, ax
 

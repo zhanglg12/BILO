@@ -209,6 +209,7 @@ if __name__ == "__main__":
 
     ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.logger.get_dir())
     ph.plot_prediction2(eng.net, eng.dataset)
+    ph.plot_prediction_2dtraj(eng.net, eng.dataset)
     # ph.plot_variation(eng.net)
 
     # save command to file

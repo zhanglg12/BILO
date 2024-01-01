@@ -79,20 +79,23 @@ class Trainer:
 
         # save model and optimizer to mlflow
         net_path = genpath("net.pth")
+        print(f'save model to {net_path}')
         torch.save(self.net.state_dict(), net_path)
         
         for lossObjName in self.lossCollection:
             lossObj = self.lossCollection[lossObjName]
-            fname = f"optimizer_{lossObjName}.pth"
+            optimizer_name = lossObj.optimizer_name
+            fname = f"optimizer_{lossObjName}_{optimizer_name}.pth"
             fpath = genpath(fname)
             lossObj.save_state(fpath)
+            print(f'save optimizer to {fpath}')
         
         
         # save dataset
-        self.dataset.save(genpath("dataset.mat"))
-        
-        print(f'artifacts saved {dirname}')
-        
+        dataset_path = genpath("dataset.mat")
+        self.dataset.save(dataset_path)
+        print(f'save dataset to {dataset_path}')
+                
     
 # simple test on training routine
 if __name__ == "__main__":
