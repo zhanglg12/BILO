@@ -95,6 +95,8 @@ class Trainer:
         dataset_path = genpath("dataset.mat")
         self.dataset.save(dataset_path)
         print(f'save dataset to {dataset_path}')
+    
+        
                 
     
 # simple test on training routine

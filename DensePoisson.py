@@ -16,6 +16,7 @@ class DensePoisson(nn.Module):
                 output_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
                 useFourierFeatures=False,
+                siren=False,
                 trainable_param=''
                 ):
         super().__init__()
@@ -47,7 +48,7 @@ class DensePoisson(nn.Module):
         else:
             self.trainable_param = []
 
-
+       
 
         if self.useFourierFeatures:
             print('Using Fourier Features')
@@ -74,6 +75,13 @@ class DensePoisson(nn.Module):
                 embedding_weights.requires_grad = False
 
 
+         # activation function
+        if siren:
+            self.act = torch.sin
+            self.siren_init()
+        else:
+            self.act = torch.tanh
+
         # separate parameters for the neural net and the PDE parameters
         # neural net parameter exclude parameter embedding and fourier feature embedding layer
         self.param_net = list(self.input_layer.parameters()) +\
@@ -84,14 +92,18 @@ class DensePoisson(nn.Module):
 
         self.param_all = self.param_net + self.param_pde
 
-
-        # initialize weights
-        # for m in self.modules():
-        #     if isinstance(m, nn.Linear):
-        #         torch.nn.init.xavier_uniform_(m.weight)
-        #         if m.bias is not None:
-        #             torch.nn.init.zeros_(m.bias)
     
+    def siren_init(self):
+        '''
+        initialize weights for siren
+        '''
+        self.omega_0 = 30
+        with torch.no_grad():
+            self.input_layer.weight.uniform_(-1 / self.input_layer.in_features, 1 / self.input_layer.in_features)
+            for layer in self.hidden_layers:
+                layer.weight.uniform_(-np.sqrt(6 / layer.in_features) / self.omega_0, 
+                                             np.sqrt(6 / layer.in_features) / self.omega_0)
+        
 
     def embedding(self, x):
         '''
@@ -120,13 +132,13 @@ class DensePoisson(nn.Module):
     def forward(self, x):
         
         X = self.embedding(x)
-        Xtmp = torch.tanh(X)
+        Xtmp = self.act(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
             hidden_output = hidden_layer(Xtmp)
             if self.use_resnet:
                 hidden_output += Xtmp  # ResNet connection
-            hidden_output = torch.tanh(hidden_output)
+            hidden_output = self.act(hidden_output)
             Xtmp = hidden_output
         
         u = self.output_layer(Xtmp)

@@ -33,6 +33,7 @@ default_opts = {
         'with_param': True,
         'useFourierFeatures':False,
         'trainable_param': '',
+        'siren': False,
     },
     'dataset_opts': {
         'N_res_train': 100,

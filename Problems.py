@@ -12,8 +12,8 @@ class PoissonProblem():
         self.input_dim = 1
         self.output_dim = 1
         self.p = 1
-        self.init_param = {'D':1.0}
-        self.exact_param = {'D':2.0}
+        
+        self.param = {'D':2.0}
         self.output_transform = lambda x, u: u * x * (1 - x)
         
 
@@ -30,6 +30,15 @@ class PoissonProblem():
 
     def u_exact(self, x, param:dict):
         return torch.sin(torch.pi * self.p * x) / param['D']
+    
+    def print_info(self):
+        # print info of pde
+        # print all parameters
+        print('Parameters:')
+        for k,v in self.param.items():
+            print(f'{k} = {v}')
+        print(f'p = {self.p}')
+        
 
 
 class PoissonProblem2():

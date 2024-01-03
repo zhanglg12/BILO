@@ -97,8 +97,6 @@ class Engine:
             print('create dataset from file')
             self.create_dataset_from_file()
 
-        
-
         self.dataset.to_device(self.device)
     
     def make_prediction(self):
