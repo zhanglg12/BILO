@@ -2,6 +2,10 @@
 import torch
 from DataSet import DataSet
 
+
+
+
+
 class PoissonProblem():
     def __init__(self, **kwargs):
         super().__init__()
@@ -62,14 +66,30 @@ class SimpleODEProblem():
         super().__init__()
         self.input_dim = 1
         self.output_dim = 2
+
+        self.dataset = DataSet(kwargs['datafile'])
+        # get parameter from mat file
+        # check empty string
+        self.param = {}
+        if kwargs['datafile']:
+            self.param['a11'] = self.dataset['A'][0,0]
+            self.param['a12'] = self.dataset['A'][0,1]
+            self.param['a21'] = self.dataset['A'][1,0]
+            self.param['a22'] = self.dataset['A'][1,1]
+            self.p = self.dataset['p']
+            self.y0 = self.dataset['y0']
+        else:
+            # error
+            raise ValueError('no dataset provided for SimpleODEProblem')
+
+        # tag for plotting, ode: plot component, 2d: plot traj, exact: can plot variation
+        self.tag = ['ode','2d']
         
-        self.init_param = {'a':0.0,}
-        self.exact_param = {'a':-5.0}
-        u0 = torch.tensor([1.0, 2.0])
+        y0 = torch.tensor(self.y0)
         
         # this allow u0 follow the device of Neuralnet
         self.output_transform = torch.nn.Module()
-        self.output_transform.register_buffer('u0', u0)
+        self.output_transform.register_buffer('u0', y0)
         self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
 
 
@@ -87,20 +107,28 @@ class SimpleODEProblem():
             u_t[:, i] = u_t_i[:, 0]  # Adjust dimensions
 
         # Perform your operations
-        res[:, 0] = u_t[:, 0] - (param['a'] * u_pred[:, 0] + u_pred[:, 1])
-        res[:, 1] = u_t[:, 1] - (4.0 * u_pred[:, 0] - 2.0 * u_pred[:, 1])
+        res[:, 0] = u_t[:, 0] - (param['a11'] * torch.pow(u_pred[:, 0],self.p) + param['a12'] * torch.pow(u_pred[:, 1],self.p))
+        res[:, 1] = u_t[:, 1] - (param['a21'] * torch.pow(u_pred[:, 0],self.p) + param['a22'] * torch.pow(u_pred[:, 1],self.p))
         
 
         return res, u_pred
 
 
     def u_exact(self, x, param:dict):
-        # get device of x
-        device = x.device
-        v1 = torch.tensor([1,4]).to(device)
-        v2 = torch.tensor([-1,1]).to(device)
-        y = 3.0/5.0 * torch.exp(-x) * v1  - 2.0/5.0 * torch.exp(-6.0*x) * v2
-        return y
+        pass
+    
+    def print_info(self):
+        # print info of pde
+        # print all parameters
+        print('Parameters:')
+        for k,v in self.param.items():
+            print(f'{k} = {v}')
+        print(f'p = {self.p}')
+        print(f'y0 = {self.y0}')
+
+
+        
+
 
 
 class LorenzProblem():

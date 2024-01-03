@@ -52,8 +52,8 @@ class lossCollection:
         if 'res' in self.loss_active:
             self.dataset['x_res_train'].requires_grad_(True)
         
-        for p in self.param:
-            p.requires_grad_(True)
+        # for p in self.param:
+        #     p.requires_grad_(True)
 
     
         self.wloss_comp = {} # component of each loss, weighted
@@ -67,8 +67,9 @@ class lossCollection:
 
     def computeResidualGrad(self):
         # compute gradient of residual w.r.t. parameter
-        for pname, pvalue in self.net.params_dict.items():
-            self.grad_res_params[pname] = torch.autograd.grad(self.res, pvalue, create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+        for pname in self.net.trainable_param:
+            self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+
         return self.grad_res_params
         
 

@@ -35,48 +35,61 @@ class PlotHelper:
         self.opts['yessave'] = False
         self.opts['save_dir'] = './tmp'
         self.opts.update(kwargs)
+    
+    def visualization(self, net):
+        # if 'ode' in self.pde.tag:
+        if 'ode' in self.pde.tag:
+            self.plot_prediction(net)
+        elif '2d' in self.pde.tag:
+            self.plot_prediction_2dtraj(net)
+        else:
+            print(f'unknown tag {self.pde.tag}')
+        
+        self.plot_variation(net)
 
     @catch_plot_errors
     def plot_variation(self, net):
         # plot variation of net w.r.t each parameter
-
-        x_test = self.dataset['x_res_test']
-
-        u_test = net(x_test)
-        u_init_test = self.pde.u_exact(x_test, net.params_dict)
-
-        fig, ax = plt.subplots()
-
+        
         # get device of current network
         device = next(net.parameters()).device
+
+        x_test = self.dataset['x_res_test']
+        with torch.no_grad():
+            u_test = net(x_test)
         
+
         # for each net.params_dict, plot the solution and variation
         for k, v in net.params_dict.items():
+            fig, ax = plt.subplots()
+            
             param_value = net.params_dict[k].item()
             param_name = k
 
             deltas = [0.0, 0.1, -0.1]
             for delta in deltas:    
                 
+                new_value = param_value + delta
                 # replace parameter
-                with torch.no_grad():    
-                    new_value = param_value + delta
+                with torch.no_grad():
                     net.params_dict[param_name].data = torch.tensor([[new_value]]).to(device)
                 
                 u_test = net(x_test)
                 ax.plot(x_test.cpu().numpy(), u_test.cpu().detach().numpy(), label=f'NN {param_name} = {new_value:.2e}')
 
-                u_exact_test = self.pde.u_exact(x_test, net.params_dict)
-                # get the color of previous line
-                color = ax.lines[-1].get_color()
-                ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().detach().numpy(), label=f'exact {param_name} = {new_value:.2e}',color=color,linestyle='--')
+                if 'exact' in self.pde.tag:
+                    # plot exact solution
+                    u_exact_test = self.pde.u_exact(x_test, net.params_dict)
+                    # get the color of previous line
+                    color = ax.lines[-1].get_color()
+                    ax.plot(x_test.cpu().numpy(), u_exact_test.cpu().detach().numpy(), label=f'exact {param_name} = {new_value:.2e}',color=color,linestyle='--')
             # set net.D
             ax.legend(loc="best")
 
             if self.opts['yessave']:
                 self.save(f'fig_variation_{param_name}.png', fig)
 
-        return fig, ax
+        return 
 
     
     def save(self, fname, fig):
@@ -86,7 +99,7 @@ class PlotHelper:
         print(f'{fname} saved to {fpath}')
      
     @catch_plot_errors
-    def plot_prediction2(self, net, dataset):
+    def plot_prediction(self, net):
         x_dat_test = self.dataset['x_dat_test']
         u_dat_test = self.dataset['u_dat_test']
 
@@ -146,56 +159,56 @@ class PlotHelper:
 
         return fig, ax
 
+    # do not use for now, very early version for simple 1d poisson
+    # @catch_plot_errors
+    # def plot_prediction(self, net):
+    #     x_test = self.dataset['x_res_test']
 
-    @catch_plot_errors
-    def plot_prediction(self, net):
-        x_test = self.dataset['x_res_test']
+    #     u_test = net(x_test)
+    #     u_init_test = self.pde.u_exact(x_test, self.pde.init_param)
+    #     u_exact_test = self.pde.u_exact(x_test, self.pde.exact_param)
 
-        u_test = net(x_test)
-        u_init_test = self.pde.u_exact(x_test, self.pde.init_param)
-        u_exact_test = self.pde.u_exact(x_test, self.pde.exact_param)
+    #     # excat u with predicted D, for comparison
+    #     u_exact_pred_D_test = self.pde.u_exact(x_test, net.params_dict)
 
-        # excat u with predicted D, for comparison
-        u_exact_pred_D_test = self.pde.u_exact(x_test, net.params_dict)
+    #     x_res_train = self.dataset['x_res_train']
+    #     u_pred = net(x_res_train)
+    #     u_res = self.dataset['u_res_train']
 
-        x_res_train = self.dataset['x_res_train']
-        u_pred = net(x_res_train)
-        u_res = self.dataset['u_res_train']
+    #     # move to cpu
+    #     x_test = x_test.cpu().detach().numpy()
+    #     u_test = u_test.cpu().detach().numpy()
+    #     u_init_test = u_init_test.cpu().detach().numpy()
+    #     u_exact_test = u_exact_test.cpu().detach().numpy()
+    #     u_exact_pred_D_test = u_exact_pred_D_test.cpu().detach().numpy()
+    #     x_res_train = x_res_train.cpu().numpy()
+    #     u_pred = u_pred.cpu().detach().numpy()
+    #     u_res = u_res.cpu().detach().numpy()
 
-        # move to cpu
-        x_test = x_test.cpu().detach().numpy()
-        u_test = u_test.cpu().detach().numpy()
-        u_init_test = u_init_test.cpu().detach().numpy()
-        u_exact_test = u_exact_test.cpu().detach().numpy()
-        u_exact_pred_D_test = u_exact_pred_D_test.cpu().detach().numpy()
-        x_res_train = x_res_train.cpu().numpy()
-        u_pred = u_pred.cpu().detach().numpy()
-        u_res = u_res.cpu().detach().numpy()
-
-        # visualize the results
-        fig, ax = plt.subplots()
+    #     # visualize the results
+    #     fig, ax = plt.subplots()
         
-        # plot nn prediction
-        ax.plot(x_test, u_test, label='nn pred')
-        # plot exact solution
-        ax.plot(x_test, u_exact_test, label='GT')
-        ax.plot(x_test, u_exact_pred_D_test, label='exact pred D',linestyle='--',color='gray')
+    #     # plot nn prediction
+    #     ax.plot(x_test, u_test, label='nn pred')
+    #     # plot exact solution
+    #     ax.plot(x_test, u_exact_test, label='GT')
+    #     ax.plot(x_test, u_exact_pred_D_test, label='exact pred D',linestyle='--',color='gray')
         
-        # scatter plot of training data
-        ax.plot(x_res_train, u_pred, '.', label='train-pred')
-        ax.plot(x_res_train, u_res, '.', label='train-data')
+    #     # scatter plot of training data
+    #     ax.plot(x_res_train, u_pred, '.', label='train-pred')
+    #     ax.plot(x_res_train, u_res, '.', label='train-data')
 
 
-        ax.legend(loc="upper right")
-        # add title
+    #     ax.legend(loc="upper right")
+    #     # add title
 
-        D = net.params_dict['D'].item()
-        ax.set_title(f'final D: {D:.3f}')
+    #     D = net.params_dict['D'].item()
+    #     ax.set_title(f'final D: {D:.3f}')
 
-        if self.opts['yessave']:
-            self.save('fig_pred.png', fig)
+    #     if self.opts['yessave']:
+    #         self.save('fig_pred.png', fig)
 
-        return fig, ax
+    #     return fig, ax
     
     @catch_plot_errors
     def plot_loss(self, hist, loss_names=None):

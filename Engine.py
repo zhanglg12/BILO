@@ -38,7 +38,9 @@ class Engine:
         self.logger = Logger(self.opts['logger_opts'])
 
     def setup_problem(self):
-        self.pde = create_pde_problem(**(self.opts['pde_opts']))
+        # setup pde problem
+        self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
+        self.pde.print_info()
     
     def setup_network(self):
         '''setup network, get network structure if restore'''
@@ -48,31 +50,28 @@ class Engine:
             # if is director
             if os.path.isdir(self.opts['restore']):
                 opts_path = os.path.join(self.opts['restore'], 'options.json')
-                opts = read_json(opts_path)
+                restore_opts = read_json(opts_path)
                 self.restore_artifacts = {fname: os.path.join(self.opts['restore'], fname) for fname in os.listdir(self.opts['restore']) if fname.endswith('.pth')}
 
             else:
                 #  restore from exp_name:run_name
-                opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+                restore_opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
         
             # udpate options from load, get network structure, catch key error
+            # do not update trainable parameters, might change
             try:
-                self.opts['nn_opts'].update(opts['nn_opts'])
+                restore_opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param']
+                self.opts['nn_opts'].update(restore_opts['nn_opts'])
             except KeyError:
                 print('options not found, make sure the network structure is the same')
                 pass
-
-        if self.opts['traintype'] == 'forward':
-            param = self.pde.exact_param
-        else:
-            param = self.pde.init_param
 
         self.opts['nn_opts']['input_dim'] = self.pde.input_dim
         self.opts['nn_opts']['output_dim'] = self.pde.output_dim
 
         self.net = DensePoisson(**self.opts['nn_opts'],
                                 output_transform=self.pde.output_transform,
-                                params_dict=param)
+                                params_dict=self.pde.param)
         self.net.to(self.device)
         
 
@@ -206,14 +205,3 @@ if __name__ == "__main__":
     eng.run()
 
     eng.dataset.to_device(eng.device)
-
-    ph = PlotHelper(eng.pde, eng.dataset, yessave=True, save_dir=eng.logger.get_dir())
-    ph.plot_prediction2(eng.net, eng.dataset)
-    ph.plot_prediction_2dtraj(eng.net, eng.dataset)
-    # ph.plot_variation(eng.net)
-
-    # save command to file
-    # f = open("commands.txt", "a")
-    # f.write(' '.join(sys.argv))
-    # f.write('\n')
-    # f.close()

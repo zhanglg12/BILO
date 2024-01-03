@@ -11,7 +11,13 @@ class DataSet(dict):
     access data set as dictionary
     '''
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        # if only one argument, assume it is a file path, remove 
+        if len(args) == 1:
+            file_path = args[0]
+            self.readmat(file_path)
+        else:
+            super().__init__(*args, **kwargs)
+
 
     def readmat(self, file_path, as_torch=True):
         # load data from .mat file, skip meta data
@@ -40,9 +46,22 @@ class DataSet(dict):
         # print name, type, and shape of each variable
         for key, value in self.items():
             shape = None
+            typename = type(value).__name__
             if isinstance(value, np.ndarray) or isinstance(value, torch.Tensor):
                 shape = value.shape
-            print(f'{key}:\t{type(value)}\t{shape}')
+                
+            print(f'{key}:\t{typename}\t{shape}')
+    
+    def __str__(self):
+        # return variable, type, and shape as string
+        string = ''
+        for key, value in self.items():
+            shape = None
+            typename = type(value).__name__ 
+            if isinstance(value, np.ndarray) or isinstance(value, torch.Tensor):
+                shape = value.shape
+                
+            string += f'{key}:\t{typename}\t{shape}\n'
     
     def save(self, file_path):
         '''save data set to .mat file
@@ -88,8 +107,8 @@ if __name__ == "__main__":
     # which variables to print
     vars2print = sys.argv[2:] if len(sys.argv) > 2 else None
 
-    dataset = DataSet()
-    dataset.readmat(filename)
+    dataset = DataSet(filename)
+    
     dataset.to_torch()
     if vars2print is None:
         dataset.printsummary()

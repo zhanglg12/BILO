@@ -16,6 +16,7 @@ class DensePoisson(nn.Module):
                 output_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
                 useFourierFeatures=False,
+                trainable_param=''
                 ):
         super().__init__()
         
@@ -26,11 +27,26 @@ class DensePoisson(nn.Module):
         self.with_param = with_param # if True, then the pde parameter is part of the network
         self.output_transform = output_transform # transform the output of the network, default is identity
         self.useFourierFeatures = useFourierFeatures
+        
 
         # convert float to tensor of size (1,1)
         # need ParameterDict to make it registered, otherwise to(device) will not automatically move it to device
         tmp = {k: nn.Parameter(torch.tensor([[v]])) for k, v in params_dict.items()}
         self.params_dict = nn.ParameterDict(tmp)
+        
+
+        if trainable_param:
+            self.trainable_param = trainable_param.split(',')
+            # only train part of the parameters
+            # trainable_param is a list of parameter names
+            for name, param in self.params_dict.items():
+                if name not in trainable_param:
+                    param.requires_grad = False
+                else:
+                    param.requires_grad = True
+        else:
+            self.trainable_param = []
+
 
 
         if self.useFourierFeatures:
@@ -54,8 +70,8 @@ class DensePoisson(nn.Module):
                 name: nn.Linear(1, width, bias=False) for name, param in self.params_dict.items()
             })
             # set requires_grad to False
-            for param in self.param_embeddings.parameters():
-                param.requires_grad = False
+            for embedding_weights in self.param_embeddings.parameters():
+                embedding_weights.requires_grad = False
 
 
         # separate parameters for the neural net and the PDE parameters
@@ -64,7 +80,7 @@ class DensePoisson(nn.Module):
                             [param for layer in self.hidden_layers for param in layer.parameters()] +\
                             list(self.output_layer.parameters())
 
-        self.param_pde = [self.params_dict[name] for name in self.params_dict.keys()]
+        self.param_pde = [self.params_dict[name] for name in self.trainable_param]
 
         self.param_all = self.param_net + self.param_pde
 
@@ -192,23 +208,24 @@ if __name__ == "__main__":
     set_seed(0)
     
     # prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
-    prob = create_pde_problem(**optobj.opts['pde_opts'])
+    prob = create_pde_problem(**optobj.opts['pde_opts'],datafile=optobj.opts['dataset_opts']['datafile'])
+    prob.print_info()
 
     optobj.opts['nn_opts']['input_dim'] = prob.input_dim
     optobj.opts['nn_opts']['output_dim'] = prob.output_dim
 
     net = DensePoisson(**optobj.opts['nn_opts'],
                 output_transform=prob.output_transform, 
-                params_dict=prob.init_param).to(device)
+                params_dict=prob.param).to(device)
     
     dataset = {}
     x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
     x.requires_grad_(True)
-    y = prob.u_exact(x, prob.exact_param)
+    y = prob.u_exact(x, prob.param)
     res, u_pred = prob.residual(net, x, net.params_dict)
 
     # print 2 norm of res
-    print(torch.norm(res))
+    print('res = ',torch.norm(res))
     
 
     

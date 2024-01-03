@@ -15,13 +15,14 @@ default_opts = {
     'smallrun': False, 
     'device': 'cuda',
     'seed': 0,
+    
     'transfer_opts':{
         'transfer_method': 'lora', # lora, freeze
         'nlayer_train': 1, # number of layers to train
         'rank': 4,
     },
     'pde_opts': {
-        'problem': 'Simpleode',
+        'problem': 'simpleode',
     },
     'nn_opts': {
         'depth': 4,
@@ -31,6 +32,7 @@ default_opts = {
         'use_resnet': False,
         'with_param': True,
         'useFourierFeatures':False,
+        'trainable_param': '',
     },
     'dataset_opts': {
         'N_res_train': 100,
@@ -161,7 +163,11 @@ class Options:
             self.opts['weights']['resgrad'] = 0.0
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
-            
+        
+        # For init, do not train parameters
+        # if self.opts['traintype'] == 'init':
+        #     self.opts['nn_opts']['trainable_param'] = ''
+        
             
         
         
