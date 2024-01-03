@@ -54,13 +54,30 @@ class PoissonProblem2():
         e = torch.exp(torch.tensor(1.0))
         return 10*( -x + e * (-1.0 + torch.exp(-x)+x)) / (-1.0 + e)
 
-# simple ode for testing
-# https://tutorial.math.lamar.edu/Classes/DE/RealEigenvalues.aspx
-# Example 4
-# x' = [-5 1;4 -2]x x(0) = [1;2]
-# x1 = 3/5 e^(-t)   + 2/5 e^(-6t)
-# x2 = 3/5 e^(-t) 4 - 2/5 e^(-6t)
-# assume A11 unkonwn
+'''
+simple ode for testing
+https://tutorial.math.lamar.edu/Classes/DE/RealEigenvalues.aspx
+Example 4
+x' = [-5 1;4 -2]x x(0) = [1;2]
+x1 = 3/5 e^(-t)   + 2/5 e^(-6t)
+x2 = 3/5 e^(-t) 4 - 2/5 e^(-6t)
+assume A11 unkonwn
+'''
+
+''' 
+Based on Supporting Information for:
+Discovering governing equations from data: Sparse identification of nonlinear dynamical systems
+Steven L. Brunton1, Joshua L. Proctor2, J. Nathan Kutz
+damped oscillator nonlinear
+dxdt = a11  x^3 + a12  y^3
+dydt = -2   x^3 + -0.1   y^3
+a11 = -0.1;
+a12 = 2;
+t0 = 0;
+tstop = 25
+y0 = [2 0];
+'''
+
 class SimpleODEProblem():
     def __init__(self, **kwargs):
         super().__init__()
@@ -185,61 +202,6 @@ class LorenzProblem():
     def u_exact(self, x, param:dict):
         pass
 
-class DampedOsc():
-    ''' Based on Supporting Information for:
-    Discovering governing equations from data: Sparse identification of nonlinear dynamical systems
-    Steven L. Brunton1, Joshua L. Proctor2, J. Nathan Kutz
-    damped oscillator nonlinear
-    dxdt = a11  x^3 + a12  y^3
-    dydt = -2   x^3 + -0.1   y^3
-    a11 = -0.1;
-    a12 = 2;
-    t0 = 0;
-    tstop = 25
-    y0 = [2 0];
-    '''
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.input_dim = 1
-        self.output_dim = 2
-        
-        # self.init_param = {'a11':-1.0, 'a12':1.0}
-        # self.exact_param = {'a11':-0.1, 'a12':2.0}
-
-        self.init_param = {'a11':-1.0, 'a12':1.0}
-        self.exact_param = {'a11':-1.0, 'a12':1.0}
-        u0 = torch.tensor([2.0, 0.0])
-
-        self.output_transform = torch.nn.Module()
-        self.output_transform.register_buffer('u0', u0)
-        self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
-        
-
-    def residual(self, nn, x, param:dict):
-        u_pred = nn.forward(x)  # Assuming x.shape is (batch, 1)
-
-        # Initialize tensors
-        u_t = torch.zeros_like(u_pred)
-        res = torch.zeros_like(u_pred)
-
-        # Compute gradients for each output dimension and adjust dimensions
-        for i in range(u_pred.shape[1]):
-            grad_outputs = torch.ones_like(u_pred[:, i])
-            u_t_i = torch.autograd.grad(u_pred[:, i], x, grad_outputs=grad_outputs, create_graph=True, retain_graph=True)[0]
-            u_t[:, i] = u_t_i[:, 0]  # Adjust dimensions
-
-        # Perform your operations
-        res[:, 0] = u_t[:, 0] - (param['a11'] * u_pred[:, 0]**3 + param['a12'] * u_pred[:, 1]**3)
-        res[:, 1] = u_t[:, 1] - (-2.0 * u_pred[:, 0]**3 - 0.1 * u_pred[:, 1]**3)
-
-        return res, u_pred
-
-    def f(self, x):
-        pass
-
-    def u_exact(self, x, param:dict):
-        pass
-
 
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
@@ -251,8 +213,6 @@ def create_pde_problem(**kwargs):
         return LorenzProblem(**kwargs)
     elif problem_type == 'simpleode':
         return SimpleODEProblem(**kwargs)
-    elif problem_type == 'dampedosc':
-        return DampedOsc(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

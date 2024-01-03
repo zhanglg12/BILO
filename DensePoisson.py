@@ -67,7 +67,7 @@ class DensePoisson(nn.Module):
         if self.with_param == True:
             # Create embedding layers for each parameter
             self.param_embeddings = nn.ModuleDict({
-                name: nn.Linear(1, width, bias=False) for name, param in self.params_dict.items()
+                name: nn.Linear(1, width, bias=True) for name, param in self.params_dict.items()
             })
             # set requires_grad to False
             for embedding_weights in self.param_embeddings.parameters():
