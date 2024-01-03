@@ -30,7 +30,7 @@ class lossCollection:
             # self.optimizer = torch.optim.LBFGS(self.param, lr=1.0, line_search_fn = 'strong_wolfe', **optim_opts)
             self.optimizer = FullBatchLBFGS(self.param, lr=1.0)
         else:
-            self.optimizer = torch.optim.Adam(self.param, **optim_opts)
+            self.optimizer = torch.optim.Adam(self.param, **optim_opts, amsgrad=True)
         
         # intermediate results for residual loss
         self.res = None

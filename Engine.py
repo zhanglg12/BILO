@@ -171,7 +171,8 @@ class Engine:
         for lossObjName in self.lossCollection:
             lossObj = self.lossCollection[lossObjName]
             
-            optim_fname = f"optimizer_{lossObjName}.pth"
+            optimizer_name = lossObj.optimizer_name
+            optim_fname = f"optimizer_{lossObjName}_{optimizer_name}.pth"
             
             if optim_fname in self.restore_artifacts:
                 optim_path = self.restore_artifacts[optim_fname]
