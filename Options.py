@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import json
 import ast
@@ -23,6 +24,7 @@ default_opts = {
     },
     'pde_opts': {
         'problem': 'simpleode',
+        'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
     },
     'nn_opts': {
         'depth': 4,
@@ -35,6 +37,7 @@ default_opts = {
         'trainable_param': '',
         'siren': False,
     },
+    'init_param':None, # nn initial parameter, can be {"'a'":2}
     'dataset_opts': {
         'N_res_train': 100,
         'N_res_test': 100,
@@ -145,13 +148,21 @@ class Options:
                     val = ast.literal_eval(args[i+1])
                 except ValueError as ve:
                     print(f'error parsing {args[i]} and {args[i+1]}: {ve}')
-                    sys.exit(1)
+                    raise
             
             found = update_nested_dict(self.opts, key, val)
             if found==0:
                 raise ValueError('Key %s not found in dictionary' % key)
             i +=2
     
+    def convert_to_dict(self, param_val_str):
+        ''' convert string of param1,value1,param2,value2 to dictionary '''
+        param_val_list = param_val_str.split(',')
+        param_val_dict = {}
+        for i in range(0,len(param_val_list),2):
+            param_val_dict[param_val_list[i]] = ast.literal_eval(param_val_list[i+1])
+        return param_val_dict
+
     def processing(self):
         if self.opts['smallrun']:
             # use small network for testing
@@ -165,9 +176,9 @@ class Options:
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
         
-        # For init, do not train parameters
-        # if self.opts['traintype'] == 'init':
-        #     self.opts['nn_opts']['trainable_param'] = ''
+        # if self.opts['pde_opts']['init_str']:
+        #     param_val_dict = self.convert_to_dict(self.opts['pde_opts']['init_str'])
+        #     self.opts['pde_opts'].update(param_val_dict)
         
             
         
@@ -175,8 +186,6 @@ class Options:
 
 
 if __name__ == "__main__":
-    
-    
     opts = Options()
     opts.parse_args(*sys.argv[1:])
 

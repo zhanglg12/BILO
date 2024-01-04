@@ -105,11 +105,18 @@ class PlotHelper:
 
         with torch.no_grad():
             upred = net(x_dat_test)
-        
+
         # move to cpu
         x_dat_test = x_dat_test.cpu().detach().numpy()
         upred = upred.cpu().detach().numpy()
         u_test = u_dat_test.cpu().detach().numpy()
+        
+        x_dat_train = self.dataset['x_dat_train'].cpu().detach().numpy()
+        u_dat_train = self.dataset['u_dat_train'].cpu().detach().numpy()
+
+
+        
+        
 
         # visualize the results
         fig, ax = plt.subplots()
@@ -123,11 +130,12 @@ class PlotHelper:
             color = color_cycle[i % len(color_cycle)]
             ax.plot(x_dat_test, upred[:, i], label=f'pred {chr(120 + i)}', color=color)
             ax.plot(x_dat_test, u_test[:, i], label=f'test {chr(120 + i)}', linestyle='--', color=color)
+            ax.scatter(x_dat_train, u_dat_train[:, i], label=f'train {chr(120 + i)}',color=color,marker='.')
 
         ax.legend()
 
         if self.opts['yessave']:
-                self.save(f'fig_pred_xtest.png', fig)
+                self.save(f'fig_pred.png', fig)
 
         return fig, ax
     

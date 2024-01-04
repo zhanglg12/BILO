@@ -70,9 +70,16 @@ class Engine:
         self.opts['nn_opts']['input_dim'] = self.pde.input_dim
         self.opts['nn_opts']['output_dim'] = self.pde.output_dim
 
+        # first copy self.pde.param, which include all pde-param in network
+        # then update by init_param if provided
+        pde_param = self.pde.param.copy()
+        init_param = self.opts['init_param']
+        if init_param is not None:
+            pde_param.update(init_param)
+
         self.net = DensePoisson(**self.opts['nn_opts'],
                                 output_transform=self.pde.output_transform,
-                                params_dict=self.pde.param)
+                                params_dict=pde_param)
         self.net.to(self.device)
         
 
@@ -83,20 +90,25 @@ class Engine:
         
     
     def setup_data(self):
-        # setup data from file or from PDE
+        '''setup data from file or from PDE
+        u_dat_train are subject to noise
+        '''
         if self.opts['dataset_opts']['datafile'] == '':
             # when exact pde solution is avialble, use it to create dataset
             print('create dataset from pde')
             self.dataset = create_dataset_from_pde(self.pde, self.opts['dataset_opts'], self.opts['noise_opts'])
-
-            # what is used for training
-            if self.opts['traintype'] == 'init':
-                self.dataset['u_dat_train'] = self.dataset['u_init_dat_train']
-            else:
-                self.dataset['u_dat_train'] = self.dataset['u_exact_dat_train']
         else:
             print('create dataset from file')
             self.create_dataset_from_file()
+
+        # down sample training data 
+        if self.opts['dataset_opts']['N_dat_train'] < self.dataset['x_dat_train'].shape[0]:
+            print('downsample training data')
+            self.dataset.uniform_downsample(self.opts['dataset_opts']['N_dat_train'], ['x_dat_train','u_dat_train'])
+
+        if self.opts['noise_opts']['use_noise']:
+            print('add noise to training data')
+            add_noise(self.dataset, self.opts['noise_opts'])
 
         self.dataset.to_device(self.device)
     
@@ -181,7 +193,46 @@ class Engine:
                 print(f'optimizer {optim_fname} not found, use default optimizer')
 
 
+def create_dataset_from_pde(pde, dsopt, noise_opts):
+    # create dataset from pde using datset option and noise option
+    
+    dataset = DataSet()
+
+    
+    # residual col-pt (collocation point), no need for u
+    dataset['x_res_train'] = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
+    dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1)
+
+    # data col-pt, for testing, use exact param
+    dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
+    dataset['u_dat_test'] = pde.u_exact(dataset['x_dat_test'], pde.param)
+
+    # data col-pt, for initialization use init_param, for training use exact_param
+    dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
+
+    dataset['u_dat_train'] = pde.u_exact(dataset['x_dat_train'], pde.param)
         
+    return dataset
+
+
+def add_noise(dataset, noise_opts):
+    '''
+    add noise to each coordinate of u_dat_train
+    For now, assuming x is 1-dim, u is d-dim. 
+    For ODE problem, this means the noise is correlated in time (if add length scale)
+    '''
+    dim = dataset['u_dat_train'].shape[1]
+    x = dataset['x_dat_train'] # (N,1)
+    noise = torch.zeros_like(dataset['u_dat_train'])
+    for i in range(dim):
+        tmp = generate_grf(x, noise_opts['variance'], noise_opts['length_scale'])
+        noise[:,i] = tmp.squeeze()
+
+    dataset['noise'] = noise
+    dataset['u_dat_train'] = dataset['u_dat_train'] + dataset['noise']
+    
+    return dataset
+
 if __name__ == "__main__":
     # test all component
     optobj = Options()

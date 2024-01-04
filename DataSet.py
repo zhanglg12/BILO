@@ -97,6 +97,16 @@ class DataSet(dict):
                 # skip non-tensor
                 print(f'skip {key}')
                 pass
+    
+    def uniform_downsample(self, n, vars):
+        '''uniformly downsample data set in the first dimension
+        n is final number of samples
+        '''
+        N = self[vars[0]].shape[0]
+        step = N//n
+        for var in vars:
+            self[var] = self[var][::step]
+            
             
     
 

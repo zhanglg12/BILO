@@ -2,18 +2,20 @@
 import torch
 from DataSet import DataSet
 
-
-
-
-
 class PoissonProblem():
     def __init__(self, **kwargs):
         super().__init__()
         self.input_dim = 1
         self.output_dim = 1
-        self.p = 1
+        self.tag = ['pde','1d','exact']
         
-        self.param = {'D':2.0}
+        # default 1
+        self.p = 1
+
+        self.param = {'D': 2.0}
+        if kwargs.get('exact_param') is not None:
+            self.param['D'] = kwargs['exact_param']['D']
+
         self.output_transform = lambda x, u: u * x * (1 - x)
         
 
@@ -108,7 +110,7 @@ class SimpleODEProblem():
             # error
             raise ValueError('no dataset provided for SimpleODEProblem')
 
-        # tag for plotting, ode: plot component, 2d: plot traj, exact: can plot variation
+        # tag for plotting, ode: plot component, 2d: plot traj, exact: have exact solution
         self.tag = ['ode','2d']
         
         y0 = torch.tensor(self.y0)
@@ -226,30 +228,6 @@ def create_pde_problem(**kwargs):
         raise ValueError(f'Unknown problem type: {problem_type}')
 
 
-
-def create_dataset_from_pde(pde, dsopt, noise_opts):
-    # create dataset from pde using datset option and noise option
+# if __name__ == "__main__":
+    # simple visualization of the data set
     
-    dataset = DataSet()
-
-    
-    # residual col-pt (collocation point), no need for u
-    dataset['x_res_train'] = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
-    dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1)
-
-    # data col-pt, for testing, use exact param
-    dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
-    dataset['u_dat_test'] = pde.u_exact(dataset['x_dat_test'], pde.exact_param)
-
-    # data col-pt, for initialization use init_param, for training use exact_param
-    dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
-
-    dataset['u_init_dat_train'] = pde.u_exact(dataset['x_dat_train'], pde.init_param)
-    dataset['u_exact_dat_train'] = pde.u_exact(dataset['x_dat_train'], pde.exact_param)
-
-    # add noise to u_exact_dat_train
-    if noise_opts['use_noise']:
-        dataset['noise'] = generate_grf(xtmp, noise_opts['variance'], noise_opts['length_scale'])
-        dataset['u_dat_train_wnoise'] = dataset['u_exact_dat_train'] + dataset['noise']
-    
-    return dataset
