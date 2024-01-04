@@ -41,10 +41,8 @@ class Engine:
         # setup pde problem
         self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
         self.pde.print_info()
-    
-    def setup_network(self):
-        '''setup network, get network structure if restore'''
-        
+
+    def restore_run(self):
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
         if self.opts['restore'] != '':
             # if is director
@@ -65,7 +63,10 @@ class Engine:
             except KeyError:
                 print('options not found, make sure the network structure is the same')
                 pass
-
+    
+    def setup_network(self):
+        '''setup network, get network structure if restore'''
+        
         self.opts['nn_opts']['input_dim'] = self.pde.input_dim
         self.opts['nn_opts']['output_dim'] = self.pde.output_dim
 
