@@ -49,10 +49,8 @@ class Logger:
         # save optioins as json
         if self.opts['use_mlflow']:
             mlflow.log_params(flatten(options))
-            savedict(options, self.gen_path('options.json'))
-        if self.opts['use_csv']:
-            savedict(options, self.gen_path('options.json'))
-    
+        savedict(options, self.gen_path('options.json'))    
+        
     def get_dir(self):
         # get artifact dir
         if self.opts['use_mlflow']:

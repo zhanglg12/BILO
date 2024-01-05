@@ -5,8 +5,8 @@ import ast
 
 
 default_opts = {
-    'logger_opts': {'use_mlflow':False,
-                    'use_stdout':True,
+    'logger_opts': {'use_mlflow':True,
+                    'use_stdout':False,
                     'use_csv':False,
                     'experiment_name':'dev',
                     'run_name':'test',
@@ -46,13 +46,13 @@ default_opts = {
         'datafile': '',
     },
     'train_opts': {
-        'max_iter': 100000,
-        'tolerance': 1e-6,
         'print_every': 50,
+        'max_iter': 100000,
+        'burnin':10000,
+        'tolerance': 1e-6, # stop if loss < tolerance
         'patience': 1000,
-        'delta_loss':1e-5,
+        'delta_loss':1e-5, # stop if no improvement in delta_loss in patience steps
         'monitor_loss':True,
-        'burnin':1000,
     },
     'lr' : 1e-3,
     'optimizer': 'adam',
@@ -176,9 +176,29 @@ class Options:
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
         
-        # if self.opts['pde_opts']['init_str']:
-        #     param_val_dict = self.convert_to_dict(self.opts['pde_opts']['init_str'])
-        #     self.opts['pde_opts'].update(param_val_dict)
+        if self.opts['traintype'] != 'basic':
+            # if not vanilla PINN, nn include parameter
+            self.opts['nn_opts']['with_param'] = True
+        
+        # for poisson problem, set init_param and exact_param
+        if self.opts['pde_opts']['problem'] == 'poisson':
+            self.opts['nn_opts']['trainable_param'] = ['D']
+            if self.opts['traintype'] == 'basic':
+                self.opts['pde_opts']['exact_param'] = {'D':1.0}
+                self.opts['pde_opts']['init_param'] = {'D':1.0}
+            # init problem, use init D to gen data
+            if self.opts['traintype'] == 'init':
+                self.opts['pde_opts']['exact_param'] = {'D':1.0}
+            # inverse problem, use exact D to gen data
+            if self.opts['traintype'] == 'inverse':
+                self.opts['pde_opts']['exact_param'] = {'D':2.0}
+        
+        # convert trainable param to list of string, split by ','
+        if self.opts['nn_opts']['trainable_param'] != '':
+            self.opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param'].split(',')
+        else:
+            self.opts['nn_opts']['trainable_param'] = []
+        
         
             
         

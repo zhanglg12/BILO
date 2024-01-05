@@ -95,7 +95,7 @@ class DataSet(dict):
                 self[key] = value.to(device)
             except AttributeError:
                 # skip non-tensor
-                print(f'skip {key}')
+                # print(f'skip {key}')
                 pass
     
     def uniform_downsample(self, n, vars):

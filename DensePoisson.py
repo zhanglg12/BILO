@@ -17,7 +17,7 @@ class DensePoisson(nn.Module):
                 use_resnet=False, with_param=False, params_dict=None, 
                 useFourierFeatures=False,
                 siren=False,
-                trainable_param=''
+                trainable_param=[]
                 ):
         super().__init__()
         
@@ -36,8 +36,8 @@ class DensePoisson(nn.Module):
         self.params_dict = nn.ParameterDict(tmp)
         
 
-        if trainable_param:
-            self.trainable_param = trainable_param.split(',')
+        self.trainable_param = trainable_param
+        if self.trainable_param:
             # only train part of the parameters
             # trainable_param is a list of parameter names
             for name, param in self.params_dict.items():
@@ -45,8 +45,6 @@ class DensePoisson(nn.Module):
                     param.requires_grad = False
                 else:
                     param.requires_grad = True
-        else:
-            self.trainable_param = []
 
        
 
