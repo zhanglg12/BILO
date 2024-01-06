@@ -37,7 +37,7 @@ default_opts = {
         'trainable_param': '',
         'siren': False,
     },
-    'init_param':None, # nn initial parameter, can be {"'a'":2}
+    'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
     'dataset_opts': {
         'N_res_train': 100,
         'N_res_test': 100,
@@ -62,6 +62,8 @@ default_opts = {
     'lbfgs_opts': {
         
     },
+    'pde_adam_opts': {'lr': 1e-3},
+    'data_adam_opts': {'lr': 1e-3},
     'noise_opts':{
         'use_noise': False,
         'variance': 0.01,
@@ -185,7 +187,7 @@ class Options:
             self.opts['nn_opts']['trainable_param'] = ['D']
             if self.opts['traintype'] == 'basic':
                 self.opts['pde_opts']['exact_param'] = {'D':1.0}
-                self.opts['pde_opts']['init_param'] = {'D':1.0}
+                self.opts['init_param'] = {'D':1.0}
             # init problem, use init D to gen data
             if self.opts['traintype'] == 'init':
                 self.opts['pde_opts']['exact_param'] = {'D':1.0}
@@ -198,6 +200,9 @@ class Options:
             self.opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param'].split(',')
         else:
             self.opts['nn_opts']['trainable_param'] = []
+        
+        if self.opts['init_param'] != '':
+            self.opts['init_param'] = self.convert_to_dict(self.opts['init_param'])
         
         
             

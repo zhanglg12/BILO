@@ -144,11 +144,12 @@ class Engine:
             self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_weights)
 
         elif self.opts['traintype'] == 'inverse':
+            
             loss_pde_weights ={'res':self.opts['weights']['res'],'resgrad':self.opts['weights']['resgrad']}
-            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_pde_weights)
+            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, self.opts[f'pde_adam_opts'], loss_pde_weights)
 
             loss_data_weights ={'data':self.opts['weights']['data']}
-            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, which_optim, optim_opts, loss_data_weights)
+            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, which_optim, self.opts[f'data_adam_opts'], loss_data_weights)
         else:
             raise ValueError(f'train type {self.opts["traintype"]} not supported')
         
