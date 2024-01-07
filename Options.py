@@ -56,14 +56,9 @@ default_opts = {
     },
     'lr' : 1e-3,
     'optimizer': 'adam',
-    'adam_opts': {
-    
-    },
-    'lbfgs_opts': {
-        
-    },
-    'pde_adam_opts': {'lr': 1e-3},
-    'data_adam_opts': {'lr': 1e-3},
+    'adam_pde_opts': {'lr': 1e-3},
+    'adam_data_opts': {'lr': 1e-3},
+    'adam_opts': {'lr': 1e-3},
     'noise_opts':{
         'use_noise': False,
         'variance': 0.01,
@@ -78,32 +73,56 @@ default_opts = {
 }
 
 
-def update_nested_dict(nested_dict, key, value):
+def update_nested_dict_full_key(nested_dict, target_key, value):
+    ''' if target_key is key1.key2.....keyN, update nested_dict['key1']['key2']...['keyN'] to value
+    '''
+    keys = target_key.split('.')
+    for key in keys[:-1]:
+        nested_dict = nested_dict[key]
+    nested_dict[keys[-1]] = value
+
+
+def update_nested_dict_unique_key(nested_dict, target_key, value):
     """
     Recursively updates a nested dictionary by finding the specified key and assigning the new value to it.
-    If the key is not found, the dictionary remains unchanged.
+    If the key is not found, raise a ValueError.
     If the key is found multiple times, a ValueError is raised.
-    
+
     Args:
     - nested_dict (dict): the nested dictionary to update
-    - key (str): the key to find and update
+    - target_key (str): the key to find and update
     - value (any): the new value to assign to the key
-    
-    Returns:
-    - None
+
     """
-    found =  0
-    for k, v in nested_dict.items():
-        if k == key:
-            nested_dict[k] = value
-            found += 1
-        elif isinstance(v, dict):
-            found +=update_nested_dict(v, key, value)
+    def update_dict(d, key, new_value):
+        found = 0
+        for k, v in d.items():
+            if k == key:
+                d[k] = new_value
+                found += 1
+            elif isinstance(v, dict):
+                sub_found = update_dict(v, key, new_value)
+                if sub_found > 0:
+                    found += sub_found
+        return found
 
-    if found>1:
-        raise ValueError('Key %s found multiple times in dictionary' % key)
+    found_count = update_dict(nested_dict, target_key, value)
+    
+    if found_count > 1:
+        raise ValueError('Key "{}" found multiple times in dictionary'.format(target_key))
+    elif found_count == 0:
+        raise ValueError('Key "{}" not found in dictionary'.format(target_key))
 
-    return found
+    return found_count
+
+
+def update_nested_dict(nested_dict, target_key, value):
+    if '.' in target_key:
+        update_nested_dict_full_key(nested_dict, target_key, value)
+    else:
+        update_nested_dict_unique_key(nested_dict, target_key, value)
+
+
 
 def copy_nested_dict(orig_dict, update_dict):
     for key, value in update_dict.items():
@@ -114,7 +133,7 @@ def copy_nested_dict(orig_dict, update_dict):
     return orig_dict
 
 
-def get_nested_dict(nested_dict, target_key):
+def get_nested_dict_unique_key(nested_dict, target_key):
     """
     get value from nested dict, if not found, result is None
     """
@@ -122,9 +141,23 @@ def get_nested_dict(nested_dict, target_key):
         if k == target_key:
             return v
         elif isinstance(v, dict):
-            result = get_nested_dict(v, target_key)
+            result = get_nested_dict_unique_key(v, target_key)
             if result is not None:
                 return result
+
+def get_nested_dict_full_key(nested_dict, target_key):
+    ''' if target_key is key1.key2.....keyN, get nested_dict['key1']['key2']...['keyN']
+    '''
+    keys = target_key.split('.')
+    for key in keys[:-1]:
+        nested_dict = nested_dict[key]
+    return nested_dict[keys[-1]]
+
+def get_nested_dict(nested_dict, target_key):
+    if '.' in target_key:
+        return get_nested_dict_full_key(nested_dict, target_key)
+    else:
+        return get_nested_dict_unique_key(nested_dict, target_key)
 
 class Options:
     def __init__(self):
@@ -203,6 +236,7 @@ class Options:
         
         if self.opts['init_param'] != '':
             self.opts['init_param'] = self.convert_to_dict(self.opts['init_param'])
+
         
         
             

@@ -28,7 +28,7 @@ class lossCollection:
 
         if optimizer_name == 'lbfgs':
             # self.optimizer = torch.optim.LBFGS(self.param, lr=1.0, line_search_fn = 'strong_wolfe', **optim_opts)
-            self.optimizer = FullBatchLBFGS(self.param, lr=1.0)
+            self.optimizer = FullBatchLBFGS(self.param, **optim_opts)
         else:
             self.optimizer = torch.optim.Adam(self.param, **optim_opts, amsgrad=True)
         
@@ -57,7 +57,7 @@ class lossCollection:
 
     
         self.wloss_comp = {} # component of each loss, weighted
-        self.loss_val = None # total loss for backprop
+        self.wtotal = None # total loss for backprop
 
 
     def computeResidual(self):
@@ -112,7 +112,7 @@ class lossCollection:
             weighted_sum += losses[key]
         
         self.wloss_comp = losses
-        self.loss_val = weighted_sum
+        self.wtotal = weighted_sum
 
     def step(self):
         if isinstance(self.optimizer, torch.optim.LBFGS):
@@ -123,14 +123,14 @@ class lossCollection:
             def closure():
                 self.optimizer.zero_grad()
                 self.getloss()
-                return self.loss_val
-            tmp_option = {'closure': closure, 'current_loss': self.loss_val}
+                return self.wtotal
+            tmp_option = {'closure': closure, 'current_loss': self.wtotal}
             self.optimizer.step(tmp_option)
         else:
             # existing step code for other optimizers
             self.optimizer.zero_grad()
             # 1 step of gradient descent
-            grads = torch.autograd.grad(self.loss_val, self.param, create_graph=True, allow_unused=True)
+            grads = torch.autograd.grad(self.wtotal, self.param, create_graph=True, allow_unused=True)
             for param, grad in zip(self.param, grads):
                 param.grad = grad
             self.optimizer.step()
@@ -146,8 +146,8 @@ class lossCollection:
         def closure():
             self.optimizer.zero_grad()
             self.getloss()
-            self.loss_val.backward()
-            return self.loss_val
+            self.wtotal.backward()
+            return self.wtotal
         return closure
 
 
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     loss_collection.step()
 
     # print the loss
-    print(loss_collection.loss_val)
+    print(loss_collection.wtotal)
     print(loss_collection.wloss_comp)
 
 

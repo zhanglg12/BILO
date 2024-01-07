@@ -80,15 +80,42 @@ def set_device(name = None):
 
 # https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
 # turn a nested dict to a single dict
-def flatten(d, parent_key=''):
-    items = []
-    for k, v in d.items():
-        new_key = k
-        if isinstance(v, dict):
-            items.extend(flatten(v, new_key).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
+# def flatten(d, parent_key=''):
+#     items = []
+#     for k, v in d.items():
+#         new_key = k
+#         if isinstance(v, dict):
+#             items.extend(flatten(v, new_key).items())
+#         else:
+#             items.append((new_key, v))
+#     return dict(items)
+
+#
+#  mlflow.log_params
+#  Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/).
+def flatten(nested_dict):
+    """
+    Flatten a nested dictionary into a single dictionary.
+    For a nested dictionary, use key1.key2.....keyN as the concatenated key.
+
+    Args:
+    - nested_dict (dict): The nested dictionary to flatten.
+
+    Returns:
+    - dict: A flattened dictionary.
+    """
+    def flatten_helper(d, parent_key='', sep='.'):
+        items = []
+        for k, v in d.items():
+            new_key = parent_key + sep + k if parent_key else k
+            if isinstance(v, dict):
+                items.extend(flatten_helper(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
+
+    return flatten_helper(nested_dict)
+
 
 
 def generate_grf(x, a, l):
