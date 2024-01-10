@@ -13,25 +13,18 @@ data loss: MSE of data
 
 from DataSet import DataSet
 from util import *
-from PyTorch_LBFGS.functions.LBFGS import FullBatchLBFGS
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde, dataset, param, optimizer_name, optim_opts, loss_weigt_dict):
+    def __init__(self, net, pde, dataset, loss_weigt_dict):
 
         
         self.net = net
         self.pde = pde
         self.dataset = dataset
-        self.param = param
-        self.optimizer_name = optimizer_name
-
-        if optimizer_name == 'lbfgs':
-            # self.optimizer = torch.optim.LBFGS(self.param, lr=1.0, line_search_fn = 'strong_wolfe', **optim_opts)
-            self.optimizer = FullBatchLBFGS(self.param, **optim_opts)
-        else:
-            self.optimizer = torch.optim.Adam(self.param, **optim_opts, amsgrad=True)
         
+
+
         # intermediate results for residual loss
         self.res = None
         self.grad_res_params = {} # gradient of residual w.r.t. parameter
@@ -45,15 +38,12 @@ class lossCollection:
         # collect keys with positive weights
         self.loss_active = []
         for k in self.loss_weight.keys():
-            if self.loss_weight[k] is not None and self.loss_weight[k] > 0:
+            if self.loss_weight[k] is not None:
                 self.loss_active.append(k)
 
         # if residual gradient loss is active, we need to compute residual gradient
         if 'res' in self.loss_active:
             self.dataset['x_res_train'].requires_grad_(True)
-        
-        # for p in self.param:
-        #     p.requires_grad_(True)
 
     
         self.wloss_comp = {} # component of each loss, weighted
@@ -113,68 +103,7 @@ class lossCollection:
         
         self.wloss_comp = losses
         self.wtotal = weighted_sum
-
-    def step(self):
-        if isinstance(self.optimizer, torch.optim.LBFGS):
-            # LBFGS step
-            self.optimizer.step(self.get_loss_closure())
-        elif isinstance(self.optimizer, FullBatchLBFGS):
-            # LBFGS step
-            def closure():
-                self.optimizer.zero_grad()
-                self.getloss()
-                return self.wtotal
-            tmp_option = {'closure': closure, 'current_loss': self.wtotal}
-            self.optimizer.step(tmp_option)
-        else:
-            # existing step code for other optimizers
-            self.optimizer.zero_grad()
-            # 1 step of gradient descent
-            grads = torch.autograd.grad(self.wtotal, self.param, create_graph=True, allow_unused=True)
-            for param, grad in zip(self.param, grads):
-                param.grad = grad
-            self.optimizer.step()
-        
-    def save_state(self, fpath):
-        # save optimizer state
-        torch.save(self.optimizer.state_dict(), fpath)
-    
-    def get_loss_closure(self):
-        """
-        Closure function for LBFGS optimizer.
-        """
-        def closure():
-            self.optimizer.zero_grad()
-            self.getloss()
-            self.wtotal.backward()
-            return self.wtotal
-        return closure
-
-
-
-def setup_dataset(pde, noise_opts, ds_opts):
-    # set up data set according to PDE, traintype, and noise_opts, ds_opts
-    
-    dataset = DataSet()
-    xtmp = torch.linspace(0, 1, ds_opts['N_res_train'] ).view(-1, 1)
-    
-    dataset['x_res_train'] = xtmp
-    # dataset['x_res_train'].requires_grad_(True)
-
-    dataset['x_res_test'] = torch.linspace(0, 1, ds_opts['N_res_test']).view(-1, 1)
-
-    # generate data, might be noisy
-    dataset['u_res_train'] = pde.u_exact(dataset['x_res_train'], pde.exact_D)
-
-
-    if noise_opts and noise_opts['use_noise']:
-        dataset['noise'] = generate_grf(xtmp, noise_opts['variance'],noise_opts['length_scale'])
-        dataset['u_res_train'] = dataset['u_res_train'] + dataset['noise']
-        print('Noise added')
-    else:
-        print('No noise added')
-    
-    return dataset
+        self.wloss_comp['total'] = self.wtotal
 
 
 class EarlyStopping:
@@ -191,7 +120,7 @@ class EarlyStopping:
 
     def __call__(self, loss, params, epoch):
         if epoch >= self.max_iter:
-            print('Stop due to max iteration')
+            print('\nStop due to max iteration')
             return True
         
         if loss < self.tolerance:

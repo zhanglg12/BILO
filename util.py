@@ -149,6 +149,7 @@ def generate_grf(x, a, l):
 def to_double(x):
     """
     Converts a torch tensor to double
+    if dictionary, convert each value to double
     """
     if isinstance(x,float):
         return x

@@ -217,7 +217,6 @@ if __name__ == "__main__":
     device = set_device('cuda')
     set_seed(0)
     
-    # prob = PoissonProblem(p=1, init_param={'D':1.0}, exact_param={'D':1.0})
     prob = create_pde_problem(**optobj.opts['pde_opts'],datafile=optobj.opts['dataset_opts']['datafile'])
     prob.print_info()
 

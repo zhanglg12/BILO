@@ -13,7 +13,7 @@ default_opts = {
                     'save_dir':'./runs/tmp'},
     'restore': '',
     'traintype': 'basic',
-    'smallrun': False, 
+    'flags': '', 
     'device': 'cuda',
     'seed': 0,
     
@@ -53,6 +53,14 @@ default_opts = {
         'patience': 1000,
         'delta_loss':1e-5, # stop if no improvement in delta_loss in patience steps
         'monitor_loss':True,
+        'lr': 1e-3,
+        # for simu training
+        'lr_net': 1e-3,
+        'lr_pde': 1e-3,
+        # for bi-level training
+        'tol_lower': 1e-6, # lower level tol
+        'max_iter_lower':100,
+        
     },
     'lr' : 1e-3,
     'optimizer': 'adam',
@@ -199,12 +207,20 @@ class Options:
         return param_val_dict
 
     def processing(self):
-        if self.opts['smallrun']:
+        self.opts['flags'] = self.opts['flags'].split(',')
+
+        if 'smallrun' in self.opts['flags']:
             # use small network for testing
             self.opts['nn_opts']['depth'] = 4
             self.opts['nn_opts']['width'] = 2
             self.opts['train_opts']['max_iter'] = 10
             self.opts['train_opts']['print_every'] = 1
+            
+        if 'local' in self.opts['flags']:
+            # use local logger
+            self.opts['logger_opts']['use_mlflow'] = False
+            self.opts['logger_opts']['use_stdout'] = True
+            self.opts['logger_opts']['use_csv'] = False
         
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = 0.0
@@ -215,6 +231,17 @@ class Options:
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
         
+        # convert trainable param to list of string, split by ','
+        if self.opts['nn_opts']['trainable_param'] != '':
+            self.opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param'].split(',')
+        else:
+            self.opts['nn_opts']['trainable_param'] = []
+        
+        if self.opts['init_param'] != '':
+            self.opts['init_param'] = self.convert_to_dict(self.opts['init_param'])
+
+        
+        # has to be after init_param is processed
         # for poisson problem, set init_param and exact_param
         if self.opts['pde_opts']['problem'] == 'poisson':
             self.opts['nn_opts']['trainable_param'] = ['D']
@@ -227,19 +254,6 @@ class Options:
             # inverse problem, use exact D to gen data
             if self.opts['traintype'] == 'inverse':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
-        
-        # convert trainable param to list of string, split by ','
-        if self.opts['nn_opts']['trainable_param'] != '':
-            self.opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param'].split(',')
-        else:
-            self.opts['nn_opts']['trainable_param'] = []
-        
-        if self.opts['init_param'] != '':
-            self.opts['init_param'] = self.convert_to_dict(self.opts['init_param'])
-
-        
-        
-            
         
         
 

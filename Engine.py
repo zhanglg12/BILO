@@ -96,7 +96,7 @@ class Engine:
         if self.opts['dataset_opts']['datafile'] == '':
             # when exact pde solution is avialble, use it to create dataset
             print('create dataset from pde')
-            self.dataset = create_dataset_from_pde(self.pde, self.opts['dataset_opts'], self.opts['noise_opts'])
+            self.dataset = create_dataset_from_pde(self.pde, self.opts['dataset_opts'])
         else:
             print('create dataset from file')
             self.create_dataset_from_file()
@@ -196,45 +196,6 @@ class Engine:
                 print(f'optimizer {optim_fname} not found, use default optimizer')
 
 
-def create_dataset_from_pde(pde, dsopt, noise_opts):
-    # create dataset from pde using datset option and noise option
-    
-    dataset = DataSet()
-
-    
-    # residual col-pt (collocation point), no need for u
-    dataset['x_res_train'] = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
-    dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1)
-
-    # data col-pt, for testing, use exact param
-    dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
-    dataset['u_dat_test'] = pde.u_exact(dataset['x_dat_test'], pde.param)
-
-    # data col-pt, for initialization use init_param, for training use exact_param
-    dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
-
-    dataset['u_dat_train'] = pde.u_exact(dataset['x_dat_train'], pde.param)
-        
-    return dataset
-
-
-def add_noise(dataset, noise_opts):
-    '''
-    add noise to each coordinate of u_dat_train
-    For now, assuming x is 1-dim, u is d-dim. 
-    For ODE problem, this means the noise is correlated in time (if add length scale)
-    '''
-    dim = dataset['u_dat_train'].shape[1]
-    x = dataset['x_dat_train'] # (N,1)
-    noise = torch.zeros_like(dataset['u_dat_train'])
-    for i in range(dim):
-        tmp = generate_grf(x, noise_opts['variance'], noise_opts['length_scale'])
-        noise[:,i] = tmp.squeeze()
-
-    dataset['noise'] = noise
-    dataset['u_dat_train'] = dataset['u_dat_train'] + dataset['noise']
-    
-    return dataset
 
 if __name__ == "__main__":
     # test all component
