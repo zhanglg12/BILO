@@ -33,6 +33,8 @@ class Engine:
         self.logger = None
         self.artifact_dir = None
         self.trainer = None
+
+        self.restore_run()
     
     def setup_logger(self):
         self.logger = Logger(self.opts['logger_opts'])
@@ -41,6 +43,7 @@ class Engine:
         # setup pde problem
         self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
         self.pde.print_info()
+        
 
     def restore_run(self):
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
@@ -50,10 +53,12 @@ class Engine:
                 opts_path = os.path.join(self.opts['restore'], 'options.json')
                 restore_opts = read_json(opts_path)
                 self.restore_artifacts = {fname: os.path.join(self.opts['restore'], fname) for fname in os.listdir(self.opts['restore']) if fname.endswith('.pth')}
+                print('restore from directory')
 
             else:
                 #  restore from exp_name:run_name
                 restore_opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
+                print('restore from mlflow')
         
             # udpate nn_opts from load, get network structure, catch key error
             # do not update trainable parameters, might change
@@ -116,85 +121,22 @@ class Engine:
         self.dataset['u_res_test'] = self.net(self.dataset['x_res_test'])
         
 
-    def setup_lossCollection(self):
-        
+    def setup_trainer(self):
+        self.lossCollection = lossCollection(self.net, self.pde, self.dataset, self.opts['weights'])
+        self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.dataset, self.lossCollection, self.logger)
+        self.trainer.config_train(self.opts['traintype'])
 
-        which_optim = self.opts['optimizer']
-        optim_opts = self.opts[f'{which_optim}_opts']
-
-        if self.opts['traintype'] == 'basic':
-            # basic method of solving inverse problem, optimize weight and parameter
-            # no resgrad, residual loss and data loss only, 
-            loss_weights ={'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}
-            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_all, which_optim, optim_opts, loss_weights)
-            
-        
-        elif self.opts['traintype'] == 'forward':
-            # fast forward solve using resdual, or together with data loss
-            loss_weights ={'res':self.opts['weights']['res'],'data':self.opts['weights']['data']}
-            self.lossCollection['basic'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_weights)
-        
-        elif self.opts['traintype'] == 'init':
-            # use all 3 losses
-            loss_weights = {'res':self.opts['weights']['res'],
-            'resgrad':self.opts['weights']['resgrad'],
-            'data':self.opts['weights']['data'],
-            'paramgrad':self.opts['weights']['paramgrad']}
-
-            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, optim_opts, loss_weights)
-
-        elif self.opts['traintype'] == 'inverse':
-            
-            loss_pde_weights ={'res':self.opts['weights']['res'],'resgrad':self.opts['weights']['resgrad']}
-            self.lossCollection['pde'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_net, which_optim, self.opts[f'adam_pde_opts'], loss_pde_weights)
-
-            loss_data_weights ={'data':self.opts['weights']['data']}
-            # self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, which_optim, self.opts[f'adam_data_opts'], loss_data_weights)
-            self.lossCollection['data'] = lossCollection(self.net, self.pde, self.dataset, self.net.param_pde, 'lbfgs', {'lr':1e-2}, loss_data_weights)
-        else:
-            raise ValueError(f'train type {self.opts["traintype"]} not supported')
-        
-
-        if self.opts['restore']!= '':
-            self.restore()
-
-        return 
-
-
-
+        if self.opts['restore'] != '':
+            self.trainer.restore(self.restore_artifacts['artifacts_dir'])
+    
     def run(self):
-
+        # training
         print_dict(self.opts)
         self.logger.log_options(self.opts)
 
-        self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.dataset, self.lossCollection, self.logger)
         self.trainer.train()
-        self.trainer.save(self.logger.get_dir())
-        # save options
-        
-
-
-    def restore(self):
-        # self.restore_artifacts is dictionary of file_name: file_path of the artifacts to be restored
-
-        # restore network structure
-        self.net.load_state_dict(torch.load(self.restore_artifacts['net.pth']))
-        print(f'net loaded from {self.restore_artifacts["net.pth"]}')
-
-        # restore optimizer
-        for lossObjName in self.lossCollection:
-            lossObj = self.lossCollection[lossObjName]
-            
-            optimizer_name = lossObj.optimizer_name
-            optim_fname = f"optimizer_{lossObjName}_{optimizer_name}.pth"
-            
-            if optim_fname in self.restore_artifacts:
-                optim_path = self.restore_artifacts[optim_fname]
-                lossObj.optimizer.load_state_dict(torch.load(optim_path))
-                print(f'optimizer {optim_fname} loaded from {optim_path}')
-            else:
-                print(f'optimizer {optim_fname} not found, use default optimizer')
-
+        self.trainer.save()
+    
 
 
 if __name__ == "__main__":
@@ -211,12 +153,7 @@ if __name__ == "__main__":
     eng.setup_network()
     eng.setup_logger()
     eng.setup_data()
-
-    eng.dataset.to_device(eng.device)
-    eng.setup_lossCollection()
+    eng.setup_trainer()
     
     summary(eng.net)
-
     eng.run()
-
-    eng.dataset.to_device(eng.device)
