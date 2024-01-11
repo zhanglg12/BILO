@@ -16,13 +16,12 @@ class Trainer:
         self.dataset = dataset
         self.lossCollection = lossCollection
         self.device = set_device()
+        self.optimizer = {}
 
         # early stopping
         self.estop = EarlyStopping(**self.opts)
 
-        # move to device
-        self.net.to(self.device)
-        self.dataset.to_device(self.device)    
+        
 
     def log_stat(self, wloss_comp, epoch,):
         # log statistics
@@ -41,27 +40,43 @@ class Trainer:
         self.traintype = traintype
         if traintype == 'basic':
             param_to_train = self.net.param_all
-            self.optimizer = optim.Adam(param_to_train, lr=self.opts['lr'])
+            self.optimizer['allparam'] = optim.Adam(param_to_train, lr=self.opts['lr'])
             self.ftrain = self.train_vanilla
-        elif traintype == 'simu':
+        
+        elif traintype == 'adj-init':
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+                {'params': self.net.param_pde, 'lr': 0.0}
             ]
-            self.optimizer = optim.Adam(optim_param_group)
+            self.optimizer['allparam'] = optim.Adam(optim_param_group)
             self.ftrain = self.train_simu
-        elif traintype == 'bilevel':
+            
+
+        elif traintype == 'adj-simu':
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
             ]
-            self.optimizer_upper = optim.Adam(optim_param_group)
-            self.optimizer_lower = optim.Adam(self.net.param_net, lr=self.opts['lr_net'])
+            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.ftrain = self.train_simu
+        elif traintype == 'adj-bi':
+            optim_param_group = [
+                {'params': self.net.param_net, 'lr': self.opts['lr_net']},
+                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+            ]
+            # all parameters
+            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            # only network parameter
+            self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'])
             self.ftrain = self.train_bilevel
         else :
             raise ValueError(f'train type {traintype} not supported')
 
     def train(self):
+        # move to device
+        self.net.to(self.device)
+        self.dataset.to_device(self.device)
+
         print(f'train with: {self.traintype}')
         try:
             self.ftrain()
@@ -77,7 +92,7 @@ class Trainer:
         epoch = 0
         while True:
 
-            self.optimizer.zero_grad()
+            self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
 
             # monitor total loss
@@ -97,7 +112,7 @@ class Trainer:
             self.set_grad(self.net.param_net, loss_net)
 
             # 1 step of GD
-            self.optimizer.step()
+            self.optimizer['allparam'].step()
             epoch += 1
 
 
@@ -114,7 +129,7 @@ class Trainer:
         
         while True:
 
-            self.optimizer_upper.zero_grad()
+            self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
 
             loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
@@ -143,7 +158,7 @@ class Trainer:
                 loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
                 self.set_grad(self.net.param_net, loss_net)
                 
-                self.optimizer_lower.step()
+                self.optimizer['netparam'].step()
 
                 epoch_lower += 1
                 epoch += 1
@@ -178,7 +193,7 @@ class Trainer:
             self.set_grad(self.net.param_net, loss_net)
             
             # 1 step of GD for all net+pde params
-            self.optimizer_upper.step()
+            self.optimizer['allparam'].step()
             # next cycle
             epoch += 1
 
@@ -190,10 +205,10 @@ class Trainer:
         epoch = 0
         while True:
 
-            self.optimizer.zero_grad()
+            self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
             self.lossCollection.wtotal.backward()
-            self.optimizer.step()
+            self.optimizer['allparam'].step()
 
             # check early stopping
             stophere = self.estop(self.lossCollection.wtotal, self.net.params_dict, epoch)
@@ -208,76 +223,88 @@ class Trainer:
             epoch += 1
 
 
-    def save_optimizer(self, dirname):
+    def save_optimizer(self):
         # save optimizer
         traintype = self.traintype
-        dirpath = os.path.join(RUNS, dirname)
-        if self.traintype == 'bilevel':
-            optim_name = self.optimizer_upper.__class__.__name__
-            fname = f"optimizer_upper_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            torch.save(self.optimizer_upper.state_dict(), fpath)
 
-            optim_name = self.optimizer_lower.__class__.__name__
-            fname = f"optimizer_lower_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            torch.save(self.optimizer_lower.state_dict(), fpath)
+        for key in self.optimizer.keys():
+            fname = f"optimizer_{key}.pth"
+            fpath = self.logger.gen_path(fname)
+            torch.save(self.optimizer[key].state_dict(), fpath)
+            print(f'save optimizer to {fpath}')
+    
+
+    def load_optim(self, optimizer, fpath):
+        if not os.path.exists(fpath):
+            print(f'optimizer file {fpath} not found, use default optimizer')
+            return
             
-
-        else:
-            optim_name = self.optimizer.__class__.__name__
-            fname = f"optimizer_{traintype}_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            torch.save(self.optimizer.state_dict(), fpath)
+        optimizer.load_state_dict(torch.load(fpath))
+        print(f'restore optimizer from {fpath}')
         
-        print(f'save optimizer to {dirpath}')
-            
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(self.device)
+
     
     def restore_optimizer(self, dirname):
-        # restore optimizer
+        # restore optimizer, need dirname
         traintype = self.traintype
-        dirpath = os.path.join(RUNS, dirname)
-        if self.traintype == 'bilevel':
-            optim_name = self.optimizer_upper.__class__.__name__
-            fname = f"optimizer_upper_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            self.optimizer_upper.load_state_dict(torch.load(fpath))
 
-            optim_name = self.optimizer_lower.__class__.__name__
-            fname = f"optimizer_lower_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            self.optimizer_lower.load_state_dict(torch.load(fpath))
+        for key in self.optimizer.keys():
+            fname = f"optimizer_{key}.pth"
+            fpath = os.path.join(dirname, fname)
+            self.load_optim(self.optimizer[key], fpath)
             
-        else:
-            optim_name = self.optimizer.__class__.__name__
-            fname = f"optimizer_{traintype}_{optim_name}.pth"
-            fpath = os.path.join(dirpath, fname)
-            self.optimizer.load_state_dict(torch.load(fpath))
+            
+            # adjust learning rate
+            # for allparam, first is net, second is pde
+            if key == 'allparam' and traintype.startswith('adj'):
+                lr_net = self.optimizer[key].param_groups[0]['lr']
+                lr_pde = self.optimizer[key].param_groups[1]['lr']
+                self.optimizer[key].param_groups[0]['lr'] = self.opts['lr_net']
+                self.optimizer[key].param_groups[1]['lr'] = self.opts['lr_pde']
+                print(f'adjust lr_net from {lr_net} to {self.opts["lr_net"]}')
+                print(f'adjust lr_pde from {lr_pde} to {self.opts["lr_pde"]}')
+            
+
+            
         
-        print(f'restore optimizer from {dirpath}')
-        
-
-
-    def save(self, dirname):
-        # save training results  
-        # this change the device of the network
-        dirpath = os.path.join(RUNS, dirname)
-        # make directory if not exist
-        os.makedirs(dirpath, exist_ok=True)
-
-        # save optimizer
-        self.save_optimizer(dirname)
-
-        # save model and optimizer to mlflow
-        net_path = os.path.join(dirpath,"net.pth")
+    def save_net(self):
+        # save network
+        net_path = self.logger.gen_path("net.pth")
         torch.save(self.net.state_dict(), net_path)
         print(f'save model to {net_path}')
-        
     
+    def restore_net(self, net_path):
+        self.net.load_state_dict(torch.load(net_path))
+        print(f'restore model from {net_path}')
+    
+    def save_dataset(self):
         # save dataset
-        dataset_path = os.path.join(dirpath, "dataset.mat")
+        dataset_path = self.logger.gen_path("dataset.mat")
         self.dataset.save(dataset_path)
     
+    def restore_dataset(self, dataset_path):
+        self.dataset.readmat(dataset_path)
+
+    def save(self):
+        '''saving dir from logger'''
+        # save optimizer
+        self.save_optimizer()
+        self.save_net()
+        self.save_dataset()
+
+    def restore(self, dirname):
+        # restore optimizer
+        self.restore_optimizer(dirname)
+
+        fnet = os.path.join(dirname, 'net.pth')
+        self.restore_net(fnet)
+
+        fdata = os.path.join(dirname, 'dataset.mat')
+        self.restore_dataset(fdata)
         
                 
     
@@ -322,11 +349,11 @@ if __name__ == "__main__":
     trainer.config_train(optobj.opts['traintype'])
 
     if optobj.opts['restore']:
-        trainer.restore_optimizer(optobj.opts['restore'])
+        trainer.restore(optobj.opts['restore'])
 
     trainer.train()
 
-    trainer.save(optobj.opts['logger_opts']['save_dir'])
+    trainer.save()
 
 
 

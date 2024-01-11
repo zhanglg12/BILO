@@ -10,7 +10,7 @@ default_opts = {
                     'use_csv':False,
                     'experiment_name':'dev',
                     'run_name':'test',
-                    'save_dir':'./runs/tmp'},
+                    'save_dir':'/tmp'},
     'restore': '',
     'traintype': 'basic',
     'flags': '', 

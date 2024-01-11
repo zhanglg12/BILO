@@ -51,7 +51,7 @@ class lossCollection:
 
 
     def computeResidual(self):
-        
+        self.dataset['x_res_train'].requires_grad_(True)
         self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict)
         return self.res, self.u_pred
 

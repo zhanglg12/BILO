@@ -3,6 +3,7 @@
 import sys
 import os
 from util import *
+from config import *
 import mlflow
 from MlflowHelper import *
 from torchtnt.utils.loggers import StdoutLogger, CSVLogger
@@ -10,6 +11,7 @@ from torchtnt.utils.loggers import StdoutLogger, CSVLogger
 class Logger:
     def __init__(self, opts):
         self.opts = opts
+        
         
         if self.opts['use_mlflow']:
             mlflow.set_experiment(self.opts['experiment_name'])
@@ -28,6 +30,7 @@ class Logger:
                 raise ValueError(f"File {path} already exist!")
             self.csv_logger = CSVLogger(path)
         
+        self.save_dir = self.get_dir()
         
 
     def log_metrics(self, metric_dict:dict, step=None):
@@ -56,10 +59,12 @@ class Logger:
         if self.opts['use_mlflow']:
             return get_active_artifact_dir()
         else:
-            return self.opts['save_dir']
+            dpath = os.path.join(RUNS, self.opts['save_dir'])
+            os.makedirs(dpath, exist_ok=True)
+            return dpath
 
     def gen_path(self, filename: str):
-        return os.path.join(self.get_dir(), filename)
+        return os.path.join(self.save_dir, filename)
         
 
 
