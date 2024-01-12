@@ -151,12 +151,16 @@ def to_double(x):
     Converts a torch tensor to double
     if dictionary, convert each value to double
     """
-    if isinstance(x,float):
-        return x
-    elif isinstance(x, torch.Tensor):
+    
+    if isinstance(x, torch.Tensor):
         return x.item()
     elif isinstance(x, torch.nn.ParameterDict) or isinstance(x, dict):
         return {key: to_double(value) for key, value in x.items()}
+
+    elif isinstance(x, int) or isinstance(x, float) or isinstance(x, str):
+        # if native python type, return as is
+        return x
+        
     else:
         raise ValueError(f'Unknown type: {type(x)}')
     

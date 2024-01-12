@@ -46,7 +46,7 @@ default_opts = {
         'datafile': '',
     },
     'train_opts': {
-        'print_every': 50,
+        'print_every': 20,
         'max_iter': 100000,
         'burnin':10000,
         'tolerance': 1e-6, # stop if loss < tolerance
@@ -58,7 +58,7 @@ default_opts = {
         'lr_net': 1e-3,
         'lr_pde': 1e-3,
         # for bi-level training
-        'tol_lower': 1e-6, # lower level tol
+        'tol_lower': 1e-2, # lower level tol
         'max_iter_lower':100,
         
     },
@@ -223,7 +223,7 @@ class Options:
             self.opts['logger_opts']['use_csv'] = False
         
         if self.opts['traintype'] == 'basic':
-            self.opts['weights']['resgrad'] = 0.0
+            self.opts['weights']['resgrad'] = None
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
         
@@ -246,13 +246,13 @@ class Options:
         if self.opts['pde_opts']['problem'] == 'poisson':
             self.opts['nn_opts']['trainable_param'] = ['D']
             if self.opts['traintype'] == 'basic':
-                self.opts['pde_opts']['exact_param'] = {'D':1.0}
+                self.opts['pde_opts']['exact_param'] = {'D':2.0}
                 self.opts['init_param'] = {'D':1.0}
             # init problem, use init D to gen data
-            if self.opts['traintype'] == 'init':
+            if self.opts['traintype'] == 'adj-init':
                 self.opts['pde_opts']['exact_param'] = {'D':1.0}
             # inverse problem, use exact D to gen data
-            if self.opts['traintype'] == 'inverse':
+            if self.opts['traintype'] == 'adj-simu':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
         
         

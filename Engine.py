@@ -64,7 +64,12 @@ class Engine:
             # do not update trainable parameters, might change
             try:
                 restore_opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param']
+
+                # update nn_opts
                 self.opts['nn_opts'].update(restore_opts['nn_opts'])
+                # update weights
+                self.opts['weights'].update(restore_opts['weights'])
+                # should not update pde options,
             except KeyError:
                 print('options not found, make sure the network structure is the same')
                 pass

@@ -130,6 +130,7 @@ class Trainer:
         while True:
 
             self.optimizer['allparam'].zero_grad()
+            self.optimizer['netparam'].zero_grad()
             self.lossCollection.getloss()
 
             loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
@@ -155,9 +156,7 @@ class Trainer:
             while loss_lower > self.opts['tol_lower']:
 
                 # take gradient of residual loss w.r.t network parameter
-                loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
-                self.set_grad(self.net.param_net, loss_net)
-                
+                self.set_grad(self.net.param_net, loss_lower)
                 self.optimizer['netparam'].step()
 
                 epoch_lower += 1
@@ -168,15 +167,20 @@ class Trainer:
                     
                 
                 # compute lower level loss
+                self.optimizer['netparam'].zero_grad()
                 self.lossCollection.getloss()
+
+                loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+                
                 wloss_comp.update(self.lossCollection.wloss_comp)
-                wloss_comp['lowertot'] = loss_net
+                wloss_comp['lowertot'] = loss_lower
 
                 log_stat(wloss_comp, 1, epoch)
             ### end of lower level
 
             if epoch_lower > 0:
                 # redo upper level loss, since lower level has changed the network
+                self.optimizer['allparam'].zero_grad()
                 self.lossCollection.getloss()
                 loss_upper = self.lossCollection.wloss_comp['data']
                 wloss_comp['uppertot'] = loss_upper
@@ -189,8 +193,8 @@ class Trainer:
             self.set_grad(self.net.param_pde, loss_upper)
             
             # take gradient of residual loss w.r.t network parameter
-            loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
-            self.set_grad(self.net.param_net, loss_net)
+            loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            self.set_grad(self.net.param_net, loss_lower)
             
             # 1 step of GD for all net+pde params
             self.optimizer['allparam'].step()
@@ -303,8 +307,9 @@ class Trainer:
         fnet = os.path.join(dirname, 'net.pth')
         self.restore_net(fnet)
 
-        fdata = os.path.join(dirname, 'dataset.mat')
-        self.restore_dataset(fdata)
+        # should not restore dataset! different to traintype
+        # fdata = os.path.join(dirname, 'dataset.mat')
+        # self.restore_dataset(fdata)
         
                 
     
