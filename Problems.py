@@ -2,6 +2,11 @@
 import torch
 from DataSet import DataSet
 
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+
+
 class PoissonProblem():
     def __init__(self, **kwargs):
         super().__init__()
@@ -141,7 +146,6 @@ class SimpleODEProblem():
 
         return res, u_pred
 
-
     def u_exact(self, x, param:dict):
         pass
     
@@ -155,7 +159,75 @@ class SimpleODEProblem():
         print(f'y0 = {self.y0}')
 
 
+    def solve_ode(self, param, tend = 1.0, num_points=1000):
+        """
+        Solves the ODE using Scipy's solve_ivp with high accuracy.
         
+        Args:
+        tend (double): end time
+        num_points (int): Number of time points to include in the solution.
+
+        Returns:
+        sol: A `OdeResult` object representing the solution.
+        """
+        # Define the ODE system
+        def ode_system(t, y):
+            x, y = y
+            dxdt = param['a11'] * x**self.p + param['a12'] * y**self.p
+            dydt = param['a21'] * x**self.p + param['a22'] * y**self.p
+            return [dxdt, dydt]
+
+
+        # Time points where the solution is computed
+        t_eval = np.linspace(0.0, tend, num_points)
+        t_span = (0.0, tend)
+
+        # Initial conditions, self.yo is 2-1 tensor, need to convert to 1-dim numpy array
+        y0 = self.y0.numpy().reshape(-1)
+
+        # Solve the ODE
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html#scipy.integrate.solve_ivp
+        sol = solve_ivp(ode_system, t_span, y0, t_eval=t_eval, method='DOP853', rtol=1e-9, atol=1e-9)
+
+        return sol
+    
+    def plot_sol(self, ax, t, X, tag=''):
+        t = t
+        x = X[0]
+        y = X[1]
+
+        if ax is None:
+            fig , ax = plt.subplots()
+        else:
+            fig = ax.get_figure()
+
+        ax.plot(t, x, label=f'x(t) {tag}')
+        ax.plot(t, y, label=f'y(t) {tag}')
+        ax.set_xlabel('t')
+        ax.set_ylabel('coordinate')
+        ax.set_title('X(t)')
+        ax.grid(True)
+        ax.legend()
+
+        return fig, ax
+    
+    def plot_traj(self, ax, X, tag):
+        x = X[0]
+        y = X[1]
+
+        if ax is None:
+            fig , ax = plt.subplots()
+        else:
+            fig = ax.get_figure()
+
+        ax.plot(x, y, label=f'X(t) {tag}')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title('trajectory')
+        ax.grid(True)
+        ax.legend()
+
+        return fig, ax
 
 
 

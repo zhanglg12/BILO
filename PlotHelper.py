@@ -37,13 +37,14 @@ class PlotHelper:
         self.opts.update(kwargs)
     
     def visualization(self, net):
+        # self.plot_loss(net.hist)
+
         # if 'ode' in self.pde.tag:
         if 'ode' in self.pde.tag:
             self.plot_prediction(net)
-        elif '2d' in self.pde.tag:
-            self.plot_prediction_2dtraj(net)
-        else:
-            print(f'unknown tag {self.pde.tag}')
+        
+        if '2d' in self.pde.tag:
+            self.plot_prediction_2dtraj(net, self.dataset)
         
         self.plot_variation(net)
 
@@ -114,8 +115,8 @@ class PlotHelper:
         x_dat_train = self.dataset['x_dat_train'].cpu().detach().numpy()
         u_dat_train = self.dataset['u_dat_train'].cpu().detach().numpy()
 
-
-        
+        if 'ode' in self.pde.tag:
+            sol = self.pde.solve_ode(to_double(net.params_dict))
         
 
         # visualize the results
@@ -128,9 +129,12 @@ class PlotHelper:
         # Plot each dimension
         for i in range(d):
             color = color_cycle[i % len(color_cycle)]
-            ax.plot(x_dat_test, upred[:, i], label=f'pred {chr(120 + i)}', color=color)
-            ax.plot(x_dat_test, u_test[:, i], label=f'test {chr(120 + i)}', linestyle='--', color=color)
-            ax.scatter(x_dat_train, u_dat_train[:, i], label=f'train {chr(120 + i)}',color=color,marker='.')
+            coord = chr(120 + i)
+            ax.plot(x_dat_test, upred[:, i], label=f'pred {coord}', color=color)
+            ax.plot(x_dat_test, u_test[:, i], label=f'test {coord}', linestyle='--', color=color)
+            ax.scatter(x_dat_train, u_dat_train[:, i], label=f'train {coord}',color=color,marker='.')
+            if 'ode' in self.pde.tag:
+                ax.plot(sol.t, sol.y[i], label=f'sol pred {coord}', linestyle=':', color=color)
 
         ax.legend()
 
@@ -158,7 +162,12 @@ class PlotHelper:
         
         # plot nn prediction, upred is n-by-2 trajectory
         ax.plot(upred[:,0], upred[:,1], label='pred')
-        ax.plot(u_test[:,0], u_test[:,1], label='test',linestyle='--')
+        ax.plot(u_test[:,0], u_test[:,1], label='sol gt param',linestyle='--')
+
+        if 'ode' in self.pde.tag:
+            # plo solution with inferred parameters
+            sol = self.pde.solve_ode(to_double(net.params_dict))
+            ax.plot(sol.y[0], sol.y[1], label='sol inf param',linestyle=':')
         
         ax.legend()
 
@@ -166,57 +175,6 @@ class PlotHelper:
                 self.save(f'fig_pred_2dtraj.png', fig)
 
         return fig, ax
-
-    # do not use for now, very early version for simple 1d poisson
-    # @catch_plot_errors
-    # def plot_prediction(self, net):
-    #     x_test = self.dataset['x_res_test']
-
-    #     u_test = net(x_test)
-    #     u_init_test = self.pde.u_exact(x_test, self.pde.init_param)
-    #     u_exact_test = self.pde.u_exact(x_test, self.pde.exact_param)
-
-    #     # excat u with predicted D, for comparison
-    #     u_exact_pred_D_test = self.pde.u_exact(x_test, net.params_dict)
-
-    #     x_res_train = self.dataset['x_res_train']
-    #     u_pred = net(x_res_train)
-    #     u_res = self.dataset['u_res_train']
-
-    #     # move to cpu
-    #     x_test = x_test.cpu().detach().numpy()
-    #     u_test = u_test.cpu().detach().numpy()
-    #     u_init_test = u_init_test.cpu().detach().numpy()
-    #     u_exact_test = u_exact_test.cpu().detach().numpy()
-    #     u_exact_pred_D_test = u_exact_pred_D_test.cpu().detach().numpy()
-    #     x_res_train = x_res_train.cpu().numpy()
-    #     u_pred = u_pred.cpu().detach().numpy()
-    #     u_res = u_res.cpu().detach().numpy()
-
-    #     # visualize the results
-    #     fig, ax = plt.subplots()
-        
-    #     # plot nn prediction
-    #     ax.plot(x_test, u_test, label='nn pred')
-    #     # plot exact solution
-    #     ax.plot(x_test, u_exact_test, label='GT')
-    #     ax.plot(x_test, u_exact_pred_D_test, label='exact pred D',linestyle='--',color='gray')
-        
-    #     # scatter plot of training data
-    #     ax.plot(x_res_train, u_pred, '.', label='train-pred')
-    #     ax.plot(x_res_train, u_res, '.', label='train-data')
-
-
-    #     ax.legend(loc="upper right")
-    #     # add title
-
-    #     D = net.params_dict['D'].item()
-    #     ax.set_title(f'final D: {D:.3f}')
-
-    #     if self.opts['yessave']:
-    #         self.save('fig_pred.png', fig)
-
-    #     return fig, ax
     
     @catch_plot_errors
     def plot_loss(self, hist, loss_names=None):

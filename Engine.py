@@ -31,7 +31,6 @@ class Engine:
         self.dataset = {}
         self.lossCollection = {}
         self.logger = None
-        self.artifact_dir = None
         self.trainer = None
 
         self.restore_run()
@@ -43,7 +42,29 @@ class Engine:
         # setup pde problem
         self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
         self.pde.print_info()
+    
+    def restore_opts(self, restore_opts):
+        ''' restore options from a previous run, and update with new options
+        '''
+        # if same traintype, then restore every thing exact training_opts
+        if self.opts['traintype'] == restore_opts['traintype']:
+            tmp = self.opts['train_opts'].copy()
+            self.opts = restore_opts.copy()
+            self.opts['train_opts'] = tmp
+            return 
+
+    
+        elif self.opts['traintype'] != 'adj-init' and restore_opts['traintype'] == 'adj-init':
+            # going from adj-init to other 
+            # same weight, different trainable parameter
+            self.opts['weights'].update(restore_opts['weights'])
+            
+            tmp = self.opts['nn_opts']['trainable_param']
+            self.opts['nn_opts'].update(restore_opts['nn_opts'])
+            self.opts['nn_opts']['trainable_param'] = tmp
         
+        else:
+            raise ValueError('undefined restore type')
 
     def restore_run(self):
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
@@ -60,19 +81,7 @@ class Engine:
                 restore_opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
                 print('restore from mlflow')
         
-            # udpate nn_opts from load, get network structure, catch key error
-            # do not update trainable parameters, might change
-            try:
-                restore_opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param']
-
-                # update nn_opts
-                self.opts['nn_opts'].update(restore_opts['nn_opts'])
-                # update weights
-                self.opts['weights'].update(restore_opts['weights'])
-                # should not update pde options,
-            except KeyError:
-                print('options not found, make sure the network structure is the same')
-                pass
+            self.restore_opts(restore_opts)
     
     def setup_network(self):
         '''setup network, get network structure if restore'''
@@ -131,8 +140,10 @@ class Engine:
         self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.dataset, self.lossCollection, self.logger)
         self.trainer.config_train(self.opts['traintype'])
 
-        if self.opts['restore'] != '':
+        if self.restore_artifacts:
             self.trainer.restore(self.restore_artifacts['artifacts_dir'])
+        else:
+            print('no restore trainer')
     
     def run(self):
         # training

@@ -62,11 +62,6 @@ default_opts = {
         'max_iter_lower':100,
         
     },
-    'lr' : 1e-3,
-    'optimizer': 'adam',
-    'adam_pde_opts': {'lr': 1e-3},
-    'adam_data_opts': {'lr': 1e-3},
-    'adam_opts': {'lr': 1e-3},
     'noise_opts':{
         'use_noise': False,
         'variance': 0.01,
@@ -255,7 +250,9 @@ class Options:
             if self.opts['traintype'] == 'adj-simu':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
         
+    
         
+
 
 
 if __name__ == "__main__":

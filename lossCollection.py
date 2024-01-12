@@ -176,15 +176,5 @@ if __name__ == "__main__":
 
     params = list(net.parameters())
     
-    # Initialize the loss collection
-    loss_collection = lossCollection(net, prob, dataset, params, optobj.opts['optimizer'], optobj.opts)
-
-    # Compute loss and perform a gradient descent step
-    loss_collection.getloss()
-    loss_collection.step()
-
-    # print the loss
-    print(loss_collection.wtotal)
-    print(loss_collection.wloss_comp)
 
 
