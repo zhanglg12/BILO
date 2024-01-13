@@ -89,18 +89,23 @@ class Trainer:
         '''
         simultaneous training of network and pde parameter
         '''
+        wloss_comp = {}
         epoch = 0
         while True:
 
             self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
 
+            loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            wloss_comp.update(self.lossCollection.wloss_comp)
+            wloss_comp['lowertot'] = loss_net
+
             # monitor total loss
             stophere = self.estop(self.lossCollection.wtotal, self.net.params_dict, epoch)
 
             # print statistics at interval or at stop
             if epoch % self.opts['print_every'] == 0 or stophere:
-                self.log_stat(self.lossCollection.wloss_comp, epoch)
+                self.log_stat(wloss_comp, epoch)
             if stophere:
                 break  
             
@@ -108,7 +113,6 @@ class Trainer:
             self.set_grad(self.net.param_pde, self.lossCollection.wloss_comp['data'])
             
             # take gradient of residual loss w.r.t network parameter
-            loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
             self.set_grad(self.net.param_net, loss_net)
 
             # 1 step of GD

@@ -15,7 +15,7 @@ class DensePoisson(nn.Module):
     def __init__(self, depth, width, input_dim=1, output_dim=1, 
                 output_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
-                useFourierFeatures=False,
+                fourier=False,
                 siren=False,
                 trainable_param=[]
                 ):
@@ -27,7 +27,7 @@ class DensePoisson(nn.Module):
         self.use_resnet = use_resnet
         self.with_param = with_param # if True, then the pde parameter is part of the network
         self.output_transform = output_transform # transform the output of the network, default is identity
-        self.useFourierFeatures = useFourierFeatures
+        self.fourier = fourier
         
 
         # convert float to tensor of size (1,1)
@@ -48,7 +48,7 @@ class DensePoisson(nn.Module):
 
        
 
-        if self.useFourierFeatures:
+        if self.fourier:
             print('Using Fourier Features')
             self.fflayer = nn.Linear(input_dim, width)
             self.fflayer.requires_grad = False
@@ -115,7 +115,7 @@ class DensePoisson(nn.Module):
 
         '''
         # fourier feature embedding
-        if self.useFourierFeatures:
+        if self.fourier:
             x = torch.sin(2 * torch.pi * self.fflayer(x))
         else:
             x = self.input_layer(x)

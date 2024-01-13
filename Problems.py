@@ -5,7 +5,7 @@ from DataSet import DataSet
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-
+from util import generate_grf
 
 class PoissonProblem():
     def __init__(self, **kwargs):
@@ -145,9 +145,7 @@ class SimpleODEProblem():
         
 
         return res, u_pred
-
-    def u_exact(self, x, param:dict):
-        pass
+        
     
     def print_info(self):
         # print info of pde
@@ -159,7 +157,7 @@ class SimpleODEProblem():
         print(f'y0 = {self.y0}')
 
 
-    def solve_ode(self, param, tend = 1.0, num_points=1000):
+    def solve_ode(self, param, tend = 1.0, num_points=1000, t_eval=None):
         """
         Solves the ODE using Scipy's solve_ivp with high accuracy.
         
@@ -179,7 +177,8 @@ class SimpleODEProblem():
 
 
         # Time points where the solution is computed
-        t_eval = np.linspace(0.0, tend, num_points)
+        if t_eval is None:
+            t_eval = np.linspace(0.0, tend, num_points)
         t_span = (0.0, tend)
 
         # Initial conditions, self.yo is 2-1 tensor, need to convert to 1-dim numpy array

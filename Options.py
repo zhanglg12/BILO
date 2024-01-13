@@ -33,7 +33,7 @@ default_opts = {
         'output_dim': 1,
         'use_resnet': False,
         'with_param': True,
-        'useFourierFeatures':False,
+        'fourier':False,
         'trainable_param': '',
         'siren': False,
     },
@@ -58,7 +58,7 @@ default_opts = {
         'lr_net': 1e-3,
         'lr_pde': 1e-3,
         # for bi-level training
-        'tol_lower': 1e-2, # lower level tol
+        'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':100,
         
     },
