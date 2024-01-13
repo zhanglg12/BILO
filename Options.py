@@ -58,7 +58,7 @@ default_opts = {
         'lr_net': 1e-3,
         'lr_pde': 1e-3,
         # for bi-level training
-        'tol_lower': 1e-3, # lower level tol
+        'tol_lower': 1e-2, # lower level tol
         'max_iter_lower':100,
         
     },
@@ -217,6 +217,21 @@ class Options:
             self.opts['logger_opts']['use_stdout'] = True
             self.opts['logger_opts']['use_csv'] = False
         
+        
+        if 'wunit' in self.opts['flags']:
+            # normalize data loss and res loss, for basic training
+            # this is for fair comparison with early stopping monitor the total loss
+            # may not be needed if traning for fixed number of iterations
+            assert self.opts['traintype'] == 'basic', 'wunit flag only valid for basic training'
+            wres = self.opts['weights']['res']
+            wdata = self.opts['weights']['data']
+            self.opts['weights']['res'] = wres/(wres+wdata)
+            self.opts['weights']['data'] = wdata/(wres+wdata)
+
+        if 'fixiter' in self.opts['flags']:
+            # fix number of iterations, do not use early stopping
+            self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
+
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = None
             # for vanilla PINN, nn does not include parameter
