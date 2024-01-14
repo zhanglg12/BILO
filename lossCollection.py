@@ -66,7 +66,7 @@ class lossCollection:
     # def computeResidualGrad(self):
     #     # super slow
     #     # compute gradient of residual w.r.t. parameter
-    #     res1d = self.res.flatten()
+        
     #     for pname in self.net.trainable_param:
     #         sum_grad = 0.0
     #         for i in range(res1d.numel()):
@@ -75,6 +75,13 @@ class lossCollection:
     #         self.grad_res_params[pname] = sum_grad
 
     #     return self.grad_res_params
+
+    # def computeResidualGrad(self):
+        # super slow
+        # compute gradient of residual w.r.t. parameter
+        # jac = self.pde.compute_jacobian(self.net, self.dataset['x_res_train'], self.net.params_dict)
+
+        # return self.grad_res_params
         
 
     def resloss(self):
@@ -94,17 +101,11 @@ class lossCollection:
     #     return mse
 
     def resgradloss(self):
-        # hacky, not exactly what I want
-        # this is MSE of MSE-res w.r.t parameters
-        # not MSE of res w.r.t parameters
-        sum_grad_sqr = 0.0
-        for pname in self.net.trainable_param:
-            # this does not seem right, lots of cancelation
-            self.grad_res_params[pname] = torch.autograd.grad(self.mse_res, self.net.params_dict[pname], create_graph=True)[0]
-            sum_grad_sqr += (self.grad_res_params[pname])**2
-        mse = sum_grad_sqr
-
-        return mse
+        n = self.dataset['x_res_train'].shape[0]
+        jac = self.pde.compute_jacobian(self.net, self.dataset['x_res_train'], self.net.params_dict)
+        # norm = torch.norm(jac)/n
+        norm = torch.sum(jac)**2
+        return norm
             
         
     # to prevent derivative of u w.r.t. parameter to be 0

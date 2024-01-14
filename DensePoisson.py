@@ -233,8 +233,12 @@ if __name__ == "__main__":
     y = prob.u_exact(x, prob.param)
     res, u_pred = prob.residual(net, x, net.params_dict)
 
+    jac  = prob.compute_jacobian(net, x, net.params_dict)
+
+
     # print 2 norm of res
     print('res = ',torch.norm(res))
+    print('jac = ',torch.norm(jac)) 
     
 
     

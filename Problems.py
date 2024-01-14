@@ -25,18 +25,38 @@ class PoissonProblem():
         
 
     def residual(self, nn, x, param:dict):
-        u_pred = nn.forward(x)
+        u_pred = nn(x)
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         res = param['D'] * u_xx - self.f(x)
         # res_D = torch.autograd.grad(res, D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
+        print('uxx[0] = ',u_xx[0],u_xx[1])
         return res, u_pred
+
+    def compute_jacobian(self, nn, x, param:dict):
+        # Define a wrapper function for the residual
+        def wrapper(a):
+            # Compute the residual
+            # set nn.param['D']=a
+            nn.params_dict['D'] = a
+            res, _ = self.residual(nn, x, {'D':a})
+            return res
+
+        # Compute the Jacobian for each parameter
+        jac =  torch.autograd.functional.jacobian(wrapper, param['D'],create_graph=True)
+        jac = torch.squeeze(jac)
+        print('jac[0] = ', jac[0],jac[1])
+        
+        return jac
 
     def f(self, x):
         return - (torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
 
     def u_exact(self, x, param:dict):
         return torch.sin(torch.pi * self.p * x) / param['D']
+    
+    
+
     
     def print_info(self):
         # print info of pde
@@ -57,7 +77,7 @@ class PoissonProblem2():
         
 
     def residual(self, nn, x, D):
-        u_pred = nn.forward(x)
+        u_pred = nn(x)
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         res = u_xx + u_x - 10.0
@@ -127,7 +147,7 @@ class SimpleODEProblem():
 
 
     def residual(self, nn, x, param:dict):
-        u_pred = nn.forward(x)  # Assuming x.shape is (batch, 1)
+        u_pred = nn(x)  # Assuming x.shape is (batch, 1)
 
         # Initialize tensors
         u_t = torch.zeros_like(u_pred)
@@ -143,8 +163,29 @@ class SimpleODEProblem():
         res[:, 0] = u_t[:, 0] - (param['a11'] * torch.pow(u_pred[:, 0],self.p) + param['a12'] * torch.pow(u_pred[:, 1],self.p))
         res[:, 1] = u_t[:, 1] - (param['a21'] * torch.pow(u_pred[:, 0],self.p) + param['a22'] * torch.pow(u_pred[:, 1],self.p))
         
-
         return res, u_pred
+    
+    
+    
+    def compute_jacobian(self, nn, x, param:dict):
+        # Define a wrapper function for the residual
+        def wrapper(a):
+            # Update param with the new values
+            param['a11'] = a[0]
+            param['a12'] = a[1]
+            param['a21'] = a[2]
+            param['a22'] = a[3]
+
+            # Compute the residual
+            res, _ = self.residual(nn, x, param)
+            return res
+
+        param = torch.cat([param['a11'], param['a12'], param['a21'], param['a22']])
+        # Compute the Jacobian for each parameter
+        jacobian = torch.autograd.functional.jacobian(wrapper, param)
+
+        return jac
+
         
     
     def print_info(self):
@@ -247,8 +288,8 @@ class LorenzProblem():
 
     def residual(self, nn, x, param:dict):
         ### much slower than method2
-        # u_pred = nn.forward(x)
-        # u_t = torch.autograd.functional.jacobian(lambda t: nn.forward(t), x, create_graph=True)
+        # u_pred = nn(x)
+        # u_t = torch.autograd.functional.jacobian(lambda t: nn(t), x, create_graph=True)
     
         # ## sum over last 2 dimensions
         # u_t = u_t.sum(dim=(2,3))
@@ -259,7 +300,7 @@ class LorenzProblem():
         # res[:,2] = u_t[:,2] - (u_pred[:,0] * u_pred[:,1] - param['beta'] * u_pred[:,2])
 
         ####method2
-        u_pred = nn.forward(x)  # Assuming x.shape is (batch, 1)
+        u_pred = nn(x)  # Assuming x.shape is (batch, 1)
 
         # Initialize tensors
         u_t = torch.zeros_like(u_pred)
