@@ -192,7 +192,6 @@ class Trainer:
                 wloss_comp['lowertot'] = loss_lower
                 log_stat(wloss_comp, 0, epoch)
 
-            
             # take gradient of data loss w.r.t pde parameter
             self.set_grad(self.net.param_pde, loss_upper)
             
