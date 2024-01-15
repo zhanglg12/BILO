@@ -30,24 +30,9 @@ class PoissonProblem():
         u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         res = param['D'] * u_xx - self.f(x)
         # res_D = torch.autograd.grad(res, D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
-        print('uxx[0] = ',u_xx[0],u_xx[1])
+        # print('uxx[0] = ',u_xx[0],u_xx[1])
         return res, u_pred
 
-    def compute_jacobian(self, nn, x, param:dict):
-        # Define a wrapper function for the residual
-        def wrapper(a):
-            # Compute the residual
-            # set nn.param['D']=a
-            nn.params_dict['D'] = a
-            res, _ = self.residual(nn, x, {'D':a})
-            return res
-
-        # Compute the Jacobian for each parameter
-        jac =  torch.autograd.functional.jacobian(wrapper, param['D'],create_graph=True)
-        jac = torch.squeeze(jac)
-        print('jac[0] = ', jac[0],jac[1])
-        
-        return jac
 
     def f(self, x):
         return - (torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)

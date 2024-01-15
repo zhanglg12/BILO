@@ -75,13 +75,17 @@ class lossCollection:
     #         self.grad_res_params[pname] = sum_grad
 
     #     return self.grad_res_params
-
-    # def computeResidualGrad(self):
-        # super slow
+    
+    def computeResidualGrad(self):
         # compute gradient of residual w.r.t. parameter
-        # jac = self.pde.compute_jacobian(self.net, self.dataset['x_res_train'], self.net.params_dict)
-
-        # return self.grad_res_params
+        n = self.res.numel()
+        V = torch.eye(n).to(self.res.device)
+        V.unsqueeze_(2)
+        for pname in self.net.trainable_param:
+            # this does not seem right, lots of cancelation
+            # self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+            self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=V)[0]
+        return self.grad_res_params
         
 
     def resloss(self):
@@ -90,22 +94,15 @@ class lossCollection:
         self.mse_res = val_loss_res
         return val_loss_res
     
-    # def resgradloss(self):
-    #     # compute mse of (gradient of residual w.r.t. parameter)
-    #     self.computeResidualGrad()
-        
-    #     # compute the sum of squares of grad-res w.r.t parameters
-    #     values = torch.stack(list(self.grad_res_params.values()))
-    #     mse = torch.mean(torch.pow(values, 2))
-        
-    #     return mse
-
     def resgradloss(self):
-        n = self.dataset['x_res_train'].shape[0]
-        jac = self.pde.compute_jacobian(self.net, self.dataset['x_res_train'], self.net.params_dict)
-        # norm = torch.norm(jac)/n
-        norm = torch.sum(jac)**2
-        return norm
+        # compute mse of (gradient of residual w.r.t. parameter)
+        self.computeResidualGrad()
+        
+        # compute the sum of squares of grad-res w.r.t parameters
+        values = torch.stack(list(self.grad_res_params.values()))
+        mse = torch.mean(torch.pow(values, 2))
+        
+        return mse
             
         
     # to prevent derivative of u w.r.t. parameter to be 0
