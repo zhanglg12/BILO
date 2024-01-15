@@ -69,6 +69,14 @@ class Trainer:
             # only network parameter
             self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'])
             self.ftrain = self.train_bilevel
+        elif traintype == 'adj-bi1opt':
+            optim_param_group = [
+                {'params': self.net.param_net, 'lr': self.opts['lr_net']},
+                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+            ]
+            # all parameters
+            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.ftrain = self.train_bilevel_singleopt
         else :
             raise ValueError(f'train type {traintype} not supported')
 
@@ -185,6 +193,95 @@ class Trainer:
             if epoch_lower > 0:
                 # redo upper level loss, since lower level has changed the network
                 self.optimizer['allparam'].zero_grad()
+                self.lossCollection.getloss()
+                loss_upper = self.lossCollection.wloss_comp['data']
+                wloss_comp['uppertot'] = loss_upper
+                loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+                wloss_comp['lowertot'] = loss_lower
+                log_stat(wloss_comp, 0, epoch)
+
+            # take gradient of data loss w.r.t pde parameter
+            self.set_grad(self.net.param_pde, loss_upper)
+            
+            # take gradient of residual loss w.r.t network parameter
+            loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            self.set_grad(self.net.param_net, loss_lower)
+            
+            # 1 step of GD for all net+pde params
+            self.optimizer['allparam'].step()
+            # next cycle
+            epoch += 1
+    
+    def train_bilevel_singleopt(self):
+        # single optimizer for all parameters, change learning rate manually
+
+        def log_stat(wloss_comp, islower, epoch):
+            # log statistics
+            if epoch % self.opts['print_every'] == 0 or stophere:
+                self.logger.log_metrics(wloss_comp, step=epoch)
+                self.logger.log_metrics(self.net.params_dict, step=epoch)
+                self.logger.log_metrics({'lower':islower}, step=epoch)
+        epoch = 0
+        wloss_comp = {}
+        
+        while True:
+
+            self.optimizer['allparam'].zero_grad()
+            self.lossCollection.getloss()
+
+            loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            loss_upper = self.lossCollection.wloss_comp['data']
+
+            wloss_comp.update(self.lossCollection.wloss_comp)
+
+            wloss_comp['lowertot'] = loss_lower
+            wloss_comp['uppertot'] = loss_upper
+
+            # check early stopping
+            stophere = self.estop(wloss_comp['total'], self.net.params_dict, epoch)
+
+            log_stat(wloss_comp, 0, epoch)
+
+
+            if stophere:
+                break  
+
+
+            ### lower level
+            epoch_lower = 0
+            while loss_lower > self.opts['tol_lower']:
+                # set second group learning rate to 0
+                self.optimizer['allparam'].param_groups[1]['lr'] = 0.0
+
+                # take gradient of residual loss w.r.t network parameter
+                self.set_grad(self.net.param_net, loss_lower)
+                self.optimizer['allparam'].step()
+
+                epoch_lower += 1
+                epoch += 1
+
+                if epoch_lower == self.opts['max_iter_lower']:
+                    break
+                    
+                
+                # compute lower level loss
+                self.optimizer['allparam'].zero_grad()
+                self.lossCollection.getloss()
+
+                loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+                
+                wloss_comp.update(self.lossCollection.wloss_comp)
+                wloss_comp['lowertot'] = loss_lower
+
+                log_stat(wloss_comp, 1, epoch)
+            ### end of lower level
+
+            if epoch_lower > 0:
+                # redo upper level loss, since lower level has changed the network
+                self.optimizer['allparam'].zero_grad()
+
+                # reset learning rate
+                self.optimizer['allparam'].param_groups[1]['lr'] = self.opts['lr_pde']
                 self.lossCollection.getloss()
                 loss_upper = self.lossCollection.wloss_comp['data']
                 wloss_comp['uppertot'] = loss_upper

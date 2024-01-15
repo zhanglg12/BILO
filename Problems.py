@@ -29,8 +29,7 @@ class PoissonProblem():
         u_x = torch.autograd.grad(u_pred, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         res = param['D'] * u_xx - self.f(x)
-        # res_D = torch.autograd.grad(res, D, create_graph=True, grad_outputs=torch.ones_like(res))[0]
-        # print('uxx[0] = ',u_xx[0],u_xx[1])
+        
         return res, u_pred
 
 
@@ -149,27 +148,6 @@ class SimpleODEProblem():
         res[:, 1] = u_t[:, 1] - (param['a21'] * torch.pow(u_pred[:, 0],self.p) + param['a22'] * torch.pow(u_pred[:, 1],self.p))
         
         return res, u_pred
-    
-    
-    
-    def compute_jacobian(self, nn, x, param:dict):
-        # Define a wrapper function for the residual
-        def wrapper(a):
-            # Update param with the new values
-            param['a11'] = a[0]
-            param['a12'] = a[1]
-            param['a21'] = a[2]
-            param['a22'] = a[3]
-
-            # Compute the residual
-            res, _ = self.residual(nn, x, param)
-            return res
-
-        param = torch.cat([param['a11'], param['a12'], param['a21'], param['a22']])
-        # Compute the Jacobian for each parameter
-        jacobian = torch.autograd.functional.jacobian(wrapper, param)
-
-        return jac
 
         
     
