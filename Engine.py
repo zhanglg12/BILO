@@ -124,6 +124,10 @@ class Engine:
         if self.opts['dataset_opts']['N_dat_train'] < self.dataset['x_dat_train'].shape[0]:
             print('downsample training data')
             self.dataset.uniform_downsample(self.opts['dataset_opts']['N_dat_train'], ['x_dat_train','u_dat_train'])
+        
+        if self.opts['dataset_opts']['N_res_train'] < self.dataset['x_res_train'].shape[0]:
+            print('downsample residual data')
+            self.dataset.uniform_downsample(self.opts['dataset_opts']['N_res_train'], ['x_res_train'])
 
         if self.opts['noise_opts']['use_noise']:
             print('add noise to training data')

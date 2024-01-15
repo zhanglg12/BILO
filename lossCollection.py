@@ -50,11 +50,18 @@ class lossCollection:
         self.wloss_comp = {} # component of each loss, weighted
         self.wtotal = None # total loss for backprop
 
+    
 
     def computeResidual(self):
         self.dataset['x_res_train'].requires_grad_(True)
         self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict)
         return self.res, self.u_pred
+    
+    def resloss(self):
+        self.computeResidual()
+        val_loss_res = mse(self.res)
+        self.mse_res = val_loss_res
+        return val_loss_res
 
     # def computeResidualGrad(self):
     #     # compute gradient of residual w.r.t. parameter
@@ -76,33 +83,59 @@ class lossCollection:
 
     #     return self.grad_res_params
     
-    def computeResidualGrad(self):
-        # compute gradient of residual w.r.t. parameter
-        n = self.res.numel()
-        V = torch.eye(n).to(self.res.device)
-        V.unsqueeze_(2)
-        for pname in self.net.trainable_param:
-            # this does not seem right, lots of cancelation
-            # self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
-            self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=V)[0]
-        return self.grad_res_params
+
+
+    # def computeResidualGrad(self):
+    #     # compute gradient of residual w.r.t. parameter
+    #     # n = self.res.numel()
+    #     # V = torch.eye(n).to(self.res.device)
+    #     # V.unsqueeze_(2)
+
+    #     # Create y with the desired properties
+    #     n,d = self.res.shape
+    #     V = torch.eye(n).to(self.res.device)
+    #     # V = torch.zeros(n, n).to(self.res.device)
+    #     # for i in range(n):
+    #     #     V[i, i]
+        
+    #     self.res_unbind = self.res.unbind(dim=1)
+        
+    #     for pname in self.net.trainable_param:
+    #         # this does not seem right, lots of cancelation
+    #         # self.grad_res_params[pname] = torch.autograd.grad(self.res, self.net.params_dict[pname], create_graph=True, grad_outputs=torch.ones_like(self.res))[0]
+    #         # import pdb; pdb.set_trace()
+    #         for j in range(d):
+    #             tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=V)[0]
+            
+    #     return self.grad_res_params
         
 
-    def resloss(self):
-        self.computeResidual()
-        val_loss_res = mse(self.res)
-        self.mse_res = val_loss_res
-        return val_loss_res
     
+    
+    # def resgradloss(self):
+    #     # compute mse of (gradient of residual w.r.t. parameter)
+    #     self.computeResidualGrad()
+        
+    #     # compute the sum of squares of grad-res w.r.t parameters
+    #     values = torch.stack(list(self.grad_res_params.values()))
+    #     mse = torch.mean(torch.pow(values, 2))
+        
+    #     return mse
+
     def resgradloss(self):
-        # compute mse of (gradient of residual w.r.t. parameter)
-        self.computeResidualGrad()
+        # compute gradient of residual w.r.t. parameter
+    
+        n,d = self.res.shape
+        V = torch.eye(n).to(self.res.device)
+        self.res_unbind = self.res.unbind(dim=1)
         
-        # compute the sum of squares of grad-res w.r.t parameters
-        values = torch.stack(list(self.grad_res_params.values()))
-        mse = torch.mean(torch.pow(values, 2))
-        
-        return mse
+        sum = 0.0        
+        for pname in self.net.trainable_param:
+            for j in range(d):
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=V)[0]
+                sum += torch.mean(torch.pow(tmp, 2))
+        return sum
+
             
         
     # to prevent derivative of u w.r.t. parameter to be 0
