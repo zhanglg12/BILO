@@ -57,7 +57,7 @@ class Trainer:
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
             ]
-            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.optimizer['allparam'] = optim.Adam(optim_param_group, amsgrad=True)
             self.ftrain = self.train_simu
         elif traintype == 'adj-bi':
             optim_param_group = [
@@ -65,9 +65,9 @@ class Trainer:
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
             ]
             # all parameters
-            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
             # only network parameter
-            self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'])
+            self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'],amsgrad=True)
             self.ftrain = self.train_bilevel
         elif traintype == 'adj-bi1opt':
             optim_param_group = [
@@ -75,7 +75,7 @@ class Trainer:
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
             ]
             # all parameters
-            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
             self.ftrain = self.train_bilevel_singleopt
         else :
             raise ValueError(f'train type {traintype} not supported')
@@ -372,9 +372,13 @@ class Trainer:
                 print(f'adjust lr_net from {lr_net} to {self.opts["lr_net"]}')
                 print(f'adjust lr_pde from {lr_pde} to {self.opts["lr_pde"]}')
             
+    def eval_net(self):
+        # evaluate network on test data after training
+        print('evaluating network on x_dat')
+        with torch.no_grad():
+            self.dataset['upred_dat_test']= self.net(self.dataset['x_dat_test'])
+            self.dataset['upred_dat_train']= self.net(self.dataset['x_dat_train'])
 
-            
-        
     def save_net(self):
         # save network
         net_path = self.logger.gen_path("net.pth")
@@ -387,6 +391,7 @@ class Trainer:
     
     def save_dataset(self):
         # save dataset
+        self.eval_net()
         dataset_path = self.logger.gen_path("dataset.mat")
         self.dataset.save(dataset_path)
     

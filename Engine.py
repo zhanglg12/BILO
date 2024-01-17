@@ -46,11 +46,11 @@ class Engine:
     def restore_opts(self, restore_opts):
         ''' restore options from a previous run, and update with new options
         '''
-        # if same traintype, then restore every thing exact training_opts
+        # only restore options of 
         if self.opts['traintype'] == restore_opts['traintype']:
             tmp = self.opts['train_opts'].copy()
-            self.opts = restore_opts.copy()
-            self.opts['train_opts'] = tmp
+            
+            self.opts['nn_opts'].update(restore_opts['nn_opts'])
             return 
 
     
