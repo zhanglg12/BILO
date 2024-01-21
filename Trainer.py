@@ -38,7 +38,7 @@ class Trainer:
     
     def config_train(self, traintype = 'basic'):
         self.traintype = traintype
-        if traintype == 'basic':
+        if traintype == 'basic' or traintype == 'fwd':
             param_to_train = self.net.param_all
             self.optimizer['allparam'] = optim.Adam(param_to_train, lr=self.opts['lr'])
             self.ftrain = self.train_vanilla

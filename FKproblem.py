@@ -16,8 +16,10 @@ class FKproblem():
         # check empty string
         self.param = {}
         if kwargs['datafile']:
-            self.param['D'] = self.dataset['D']
-            self.param['rho'] = self.dataset['rho']
+            self.param['rD'] = self.dataset['rD']
+            self.param['rRHO'] = self.dataset['rRHO']
+            self.D = self.dataset['D']
+            self.RHO = self.dataset['RHO']
         else:
             # error
             raise ValueError('no dataset provided for FKproblem')
@@ -53,7 +55,7 @@ class FKproblem():
 
         
         # Compute the right-hand side of the PDE
-        rhs = param['D'] * u_xx + param['rho'] * u_pred * (1 - u_pred)
+        rhs = param['rD'] * self.D * u_xx + param['rRHO'] * self.RHO * u_pred * (1 - u_pred)
         
         # Compute the residual
         res = u_t - rhs
@@ -63,8 +65,10 @@ class FKproblem():
     
     def print_info(self):
         # print parameter
-        print('D = ', self.param['D'])
-        print('rho = ', self.param['rho'])
+        print('D = ', self.D)
+        print('RHO = ', self.RHO)
+        print('rD = ', self.param['rD'])
+        print('rRHO = ', self.param['rRHO'])
     
 
 

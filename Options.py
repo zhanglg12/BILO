@@ -232,12 +232,19 @@ class Options:
             # fix number of iterations, do not use early stopping
             self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
 
+        # training type
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = None
             # for vanilla PINN, nn does not include parameter
             self.opts['nn_opts']['with_param'] = False
         
-        if self.opts['traintype'] != 'basic':
+        if self.opts['traintype'] == 'fwd':
+            # for fwd problem, nn does not include parameter, no training on parameter
+            self.opts['nn_opts']['with_param'] = False
+            self.opts['nn_opts']['trainable_param'] = ''
+            self.opts['weights']['data'] = None
+        
+        if self.opts['traintype'].startswith('adj'):
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
         
