@@ -39,14 +39,17 @@ class PlotHelper:
     def visualization(self, net):
         # self.plot_loss(net.hist)
 
-        # if 'ode' in self.pde.tag:
+        if 'ode' in self.pde.tag:
         
-        self.plot_prediction(net)
+            self.plot_prediction(net)
+            
+            if '2d' in self.pde.tag:
+                self.plot_prediction_2dtraj(net, self.dataset)
+            
+            self.plot_variation(net)
         
-        if '2d' in self.pde.tag:
-            self.plot_prediction_2dtraj(net, self.dataset)
-        
-        self.plot_variation(net)
+        else:
+            self.pde.visualize(self.dataset, net, savedir=self.opts['save_dir'])
 
     @catch_plot_errors
     def plot_variation(self, net):

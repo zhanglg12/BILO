@@ -2,10 +2,13 @@
 import torch
 from DataSet import DataSet
 
+
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from util import generate_grf
+
+from FKproblem import FKproblem
 
 class PoissonProblem():
     def __init__(self, **kwargs):
@@ -299,6 +302,8 @@ def create_pde_problem(**kwargs):
         return LorenzProblem(**kwargs)
     elif problem_type == 'simpleode':
         return SimpleODEProblem(**kwargs)
+    elif problem_type == 'fk':
+        return FKproblem(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 
