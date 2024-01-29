@@ -7,7 +7,7 @@ import torch.nn as nn
 from util import *
 from config import *
 from MlflowHelper import MlflowHelper
-from Problems import *
+
 from Options import *
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
@@ -110,8 +110,9 @@ class DensePoisson(nn.Module):
         if fourier feature embedding:
             then y = sin(2*pi* (Wx+b))
         
-        if with_param, then Wy+b
-        if inverse, then Wy+b + W'p+b' (pde parameter embedding)
+        if with_param, then Wy+b + W'p+b' (pde parameter embedding)
+        This is the same as concat [x, pde_param] and then do a linear layer
+        otherwise, then Wy+b
 
         '''
         # fourier feature embedding

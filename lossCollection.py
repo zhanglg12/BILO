@@ -50,6 +50,10 @@ class lossCollection:
         self.wloss_comp = {} # component of each loss, weighted
         self.wtotal = None # total loss for backprop
 
+        if 'resgrad' in self.loss_active: 
+            n = self.dataset['x_res_train'].shape[0]
+            self.idmx = torch.eye(n).to(self.dataset['x_res_train'].device) # identity matrix for computing gradient of residual w.r.t. parameter
+
     
 
     def computeResidual(self):
@@ -123,16 +127,13 @@ class lossCollection:
     #     return mse
 
     def resgradloss(self):
-        # compute gradient of residual w.r.t. parameter
-    
-        n,d = self.res.shape
-        V = torch.eye(n).to(self.res.device)
-        self.res_unbind = self.res.unbind(dim=1)
-        
+        # compute gradient of residual w.r.t. parameter        
+        self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
+
         sum = 0.0        
         for pname in self.net.trainable_param:
-            for j in range(d):
-                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=V)[0]
+            for j in range(self.pde.output_dim):
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs= self.idmx)[0]
                 sum += torch.mean(torch.pow(tmp, 2))
         return sum
 

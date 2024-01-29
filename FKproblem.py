@@ -130,3 +130,6 @@ class FKproblem():
         self.plot_pred_seq(dataset, net, savedir=savedir)
         self.plot_scatter(dataset, net, savedir=savedir)
 
+
+
+    
