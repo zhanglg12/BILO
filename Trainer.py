@@ -8,12 +8,12 @@ from Logger import Logger
 import torch.optim as optim
 
 class Trainer:
-    def __init__(self, opts, net, pde, dataset, lossCollection, logger:Logger):
+    def __init__(self, opts, net, pde, lossCollection, logger:Logger):
         self.opts = opts
         self.logger = logger
         self.net = net
         self.pde = pde
-        self.dataset = dataset
+        
         self.lossCollection = lossCollection
         self.device = set_device()
         self.optimizer = {}
@@ -83,14 +83,14 @@ class Trainer:
     def train(self):
         # move to device
         self.net.to(self.device)
-        self.dataset.to_device(self.device)
+        self.pde.dataset.to_device(self.device)
 
         print(f'train with: {self.traintype}')
         try:
             self.ftrain()
         except KeyboardInterrupt:
             print('KeyboardInterrupt')
-        pass
+        
 
 
     def train_simu(self):
@@ -311,7 +311,7 @@ class Trainer:
 
             self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
-            self.lossCollection.wtotal.backward()
+            self.lossCollection.wtotal.backward(retain_graph=True)
             self.optimizer['allparam'].step()
 
             # check early stopping
@@ -372,12 +372,6 @@ class Trainer:
                 print(f'adjust lr_net from {lr_net} to {self.opts["lr_net"]}')
                 print(f'adjust lr_pde from {lr_pde} to {self.opts["lr_pde"]}')
             
-    def eval_net(self):
-        # evaluate network on test data after training
-        print('evaluating network on x_dat')
-        with torch.no_grad():
-            self.dataset['upred_dat_test']= self.net(self.dataset['x_dat_test'])
-            self.dataset['upred_dat_train']= self.net(self.dataset['x_dat_train'])
 
     def save_net(self):
         # save network
@@ -391,12 +385,10 @@ class Trainer:
     
     def save_dataset(self):
         # save dataset
-        self.eval_net()
+        self.pde.make_prediction(self.net)
         dataset_path = self.logger.gen_path("dataset.mat")
-        self.dataset.save(dataset_path)
-    
-    def restore_dataset(self, dataset_path):
-        self.dataset.readmat(dataset_path)
+        self.pde.dataset.save(dataset_path)
+
 
     def save(self):
         '''saving dir from logger'''
@@ -411,10 +403,6 @@ class Trainer:
 
         fnet = os.path.join(dirname, 'net.pth')
         self.restore_net(fnet)
-
-        # should not restore dataset! different to traintype
-        # fdata = os.path.join(dirname, 'dataset.mat')
-        # self.restore_dataset(fdata)
         
                 
     
@@ -449,12 +437,12 @@ if __name__ == "__main__":
 
     
     # set up los
-    lc = lossCollection(net, pde, dataset, optobj.opts['weights'])
+    lc = lossCollection(net, pde, optobj.opts['weights'])
 
     print_dict(optobj.opts)
     ### basic
     
-    trainer = Trainer(optobj.opts['train_opts'], net, pde, dataset, lc, logger)
+    trainer = Trainer(optobj.opts['train_opts'], net, pde, lc, logger)
     
     trainer.config_train(optobj.opts['traintype'])
 

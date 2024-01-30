@@ -36,6 +36,7 @@ class GBMproblem():
         
         self.x0 = self.dataset['x0char']
         self.L = self.dataset['L']
+        self.use_res = kwargs['use_res']
 
 
         self.output_transform = torch.nn.Module()
@@ -93,8 +94,13 @@ class GBMproblem():
 
     def get_data_loss(self, net):
         # get data loss
-        u_pred = net(self.dataset['X_dat_train'])
-        loss = torch.mean(torch.square(u_pred - self.dataset['ugt_dat_train']))
+        if self.use_res:
+            u_pred = net(self.dataset['X_res_train'])
+            loss = torch.mean(torch.square((u_pred - self.dataset['ugt_res_train'])*self.dataset['phi_res_train']))
+        else:
+            u_pred = net(self.dataset['X_dat_train'])
+            loss = torch.mean(torch.square((u_pred - self.dataset['ugt_dat_train'])*self.dataset['phi_dat_train']))
+        
         return loss
     
     def print_info(self):
@@ -106,14 +112,10 @@ class GBMproblem():
         x_res = self.dataset['X_res']
         
         with torch.no_grad():
-            self.dataset['upred_xdat'] = net(x_dat)
-            self.dataset['upred_xres'] = net(x_res)
+            self.dataset['upred_dat'] = net(x_dat)
+            self.dataset['upred_res'] = net(x_res)
 
-    def plot_scatter_pred(self, net, savedir=None):
-        self.dataset.to_np()        
-        ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_xdat'], fname = 'fig_upred_xdat.png', savedir=savedir)
-        ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_xres'], fname = 'fig_upred_xres.png', savedir=savedir)
-        
+            
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
 
         x = X[:,1:]
@@ -133,23 +135,25 @@ class GBMproblem():
 
         return fig, ax
     
-    def visualize(self, net, savedir=None):
+    def visualize(self, savedir=None):
         # visualize the results
-        self.plot_scatter_pred(net, savedir=savedir)
+        self.dataset.to_np()        
+        ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_dat'], fname = 'fig_upred_dat.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
     
-    def setup_dataset(self, ds_opts):
+    def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''
         
         # data loss
         ndat_train = min(ds_opts['N_dat_train'], self.dataset['X_dat'].shape[0])
         vars = self.dataset.filter('_dat')
-        self.dataset.subsample_train(ndat_train, vars)
+        self.dataset.subsample_firstn_astrain(ndat_train, vars)
         print('downsample ', vars, ' to ', ndat_train)
 
         # res loss
         nres_train = min(ds_opts['N_res_train'], self.dataset['X_res'].shape[0])
         vars = self.dataset.filter('_res')
-        self.dataset.subsample_train(nres_train, vars)
+        self.dataset.subsample_firstn_astrain(nres_train, vars)
         print('downsample ', vars, ' to ', nres_train)
 
         

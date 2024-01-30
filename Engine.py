@@ -42,7 +42,7 @@ class Engine:
     def setup_problem(self):
         # setup pde problem
         self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
-        self.pde.setup_dataset(self.opts['dataset_opts'])
+        self.pde.setup_dataset(self.opts['dataset_opts'], self.opts['noise_opts'])
         self.pde.dataset.to_device(self.device)
         self.pde.print_info()
 

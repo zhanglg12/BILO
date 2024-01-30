@@ -165,3 +165,20 @@ def to_double(x):
         raise ValueError(f'Unknown type: {type(x)}')
     
         
+def add_noise(dataset, noise_opts):
+    '''
+    add noise to each coordinate of u_dat_train
+    For now, assuming x is 1-dim, u is d-dim. 
+    For ODE problem, this means the noise is correlated in time (if add length scale)
+    '''
+    dim = dataset['u_dat_train'].shape[1]
+    x = dataset['x_dat_train'] # (N,1)
+    noise = torch.zeros_like(dataset['u_dat_train'])
+    for i in range(dim):
+        tmp = generate_grf(x, noise_opts['variance'], noise_opts['length_scale'])
+        noise[:,i] = tmp.squeeze()
+
+    dataset['noise'] = noise
+    dataset['u_dat_train'] = dataset['u_dat_train'] + dataset['noise']
+    
+    return dataset

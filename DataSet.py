@@ -112,12 +112,21 @@ class DataSet(dict):
         '''
         return [key for key in self.keys() if substr in key]
     
-    def subsample_train(self, n, vars):
+    def subsample_firstn_astrain(self, n, vars):
         '''subsample first n row for training. 
         add _train suffix to variable name
         '''
         for var in vars:
             self[var+'_train'] = self[var][:n]
+        
+    def subsample_unif_astrain(self, n, vars):
+        '''subsample n row uniformly for training. 
+        add _train suffix to variable name
+        '''
+        N = self[vars[0]].shape[0]
+        idx = np.random.choice(N, n, replace=False)
+        for var in vars:
+            self[var+'_train'] = self[var][idx]
             
             
     

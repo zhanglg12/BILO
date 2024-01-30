@@ -25,6 +25,7 @@ default_opts = {
     'pde_opts': {
         'problem': 'simpleode',
         'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
+        'use_res': False, # for GBM problem, use (X_res u_res), i.e., full time range, for data loss
     },
     'nn_opts': {
         'depth': 4,
