@@ -2,6 +2,9 @@
 import sys
 import torch
 import torch.nn as nn
+
+from matplotlib import pyplot as plt
+
 from config import *
 from util import *
 
@@ -9,7 +12,7 @@ from DensePoisson import *
 from MlflowHelper import MlflowHelper
 from DataSet import DataSet
 from Problems import *
-from matplotlib import pyplot as plt
+
 
 DEBUG = True
 def catch_plot_errors(func):
@@ -25,7 +28,6 @@ def catch_plot_errors(func):
 
 class PlotHelper:
     def __init__(self, pde, dataset, **kwargs) -> None:
-
         
         self.pde = pde
         self.dataset = dataset
@@ -37,19 +39,8 @@ class PlotHelper:
         self.opts.update(kwargs)
     
     def visualization(self, net):
-        # self.plot_loss(net.hist)
-
-        if 'ode' in self.pde.tag:
         
-            self.plot_prediction(net)
-            
-            if '2d' in self.pde.tag:
-                self.plot_prediction_2dtraj(net, self.dataset)
-            
-            self.plot_variation(net)
-        
-        else:
-            self.pde.visualize(self.dataset, net, savedir=self.opts['save_dir'])
+        self.pde.visualize(net, savedir=self.opts['save_dir'])
 
     @catch_plot_errors
     def plot_variation(self, net):

@@ -11,20 +11,16 @@ residual gradient loss: derivative of residual w.r.t. pde parameter
 data loss: MSE of data
 '''
 
-from DataSet import DataSet
 from util import *
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde, dataset, loss_weigt_dict):
+    def __init__(self, net, pde,  loss_weigt_dict):
 
         
         self.net = net
         self.pde = pde
-        self.dataset = dataset
-        
-
-
+    
         # intermediate results for residual loss
         self.res = None
         self.mse_res = None
@@ -41,28 +37,20 @@ class lossCollection:
         for k in self.loss_weight.keys():
             if self.loss_weight[k] is not None:
                 self.loss_active.append(k)
-
-        # if residual gradient loss is active, we need to compute residual gradient
-        if 'res' in self.loss_active:
-            self.dataset['x_res_train'].requires_grad_(True)
-
     
         self.wloss_comp = {} # component of each loss, weighted
         self.wtotal = None # total loss for backprop
 
-        if 'resgrad' in self.loss_active: 
-            n = self.dataset['x_res_train'].shape[0]
-            self.idmx = torch.eye(n).to(self.dataset['x_res_train'].device) # identity matrix for computing gradient of residual w.r.t. parameter
-
+        self.idmx = None # identity matrix for computing gradient of residual w.r.t. parameter
     
 
-    def computeResidual(self):
-        self.dataset['x_res_train'].requires_grad_(True)
-        self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict)
-        return self.res, self.u_pred
+    # def computeResidual(self):
+    #     self.dataset['x_res_train'].requires_grad_(True)
+    #     self.res, self.u_pred = self.pde.residual(self.net, self.dataset['x_res_train'], self.net.params_dict)
+    #     return self.res, self.u_pred
     
     def resloss(self):
-        self.computeResidual()
+        self.res, self.u_pred = self.pde.get_res_pred(self.net)
         val_loss_res = mse(self.res)
         self.mse_res = val_loss_res
         return val_loss_res
@@ -127,18 +115,20 @@ class lossCollection:
     #     return mse
 
     def resgradloss(self):
-        # compute gradient of residual w.r.t. parameter        
+        # compute gradient of residual w.r.t. parameter   
         self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
+
+        if self.idmx is None:
+            n = self.res.shape[0]
+            self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
 
         sum = 0.0        
         for pname in self.net.trainable_param:
             for j in range(self.pde.output_dim):
-                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs= self.idmx)[0]
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=self.idmx)[0]
                 sum += torch.mean(torch.pow(tmp, 2))
         return sum
 
-            
-        
     # to prevent derivative of u w.r.t. parameter to be 0
     # for now, just fix the weight of the embedding.
     def paramgradloss(self):
@@ -149,8 +139,9 @@ class lossCollection:
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
-        self.u_pred = self.net(self.dataset['x_dat_train'])
-        return mse(self.u_pred, self.dataset['u_dat_train'])
+        # self.u_pred = self.net(self.dataset['x_dat_train'])
+        # return mse(self.u_pred, self.dataset['u_dat_train'])
+        return self.pde.get_data_loss(self.net)
     
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight

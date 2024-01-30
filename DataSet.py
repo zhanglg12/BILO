@@ -68,7 +68,7 @@ class DataSet(dict):
         '''
         # save data set to .mat file
         print(f'save dataset to {file_path}')
-        self.to_cpu()
+        self.to_np()
         savemat(file_path, self)
     
     def to_torch(self):
@@ -80,13 +80,13 @@ class DataSet(dict):
             if isinstance(value, np.ndarray):
                 self[key] = torch.tensor(value,dtype=torch.float32)
     
-    def to_cpu(self):
+    def to_np(self):
         '''convert tensor to cpu
         '''
         print('move dataset to cpu')
         for key, value in self.items():
             if isinstance(value, torch.Tensor):
-                self[key] = value.cpu().detach()
+                self[key] = value.cpu().detach().numpy()
     
     def to_device(self, device):
         print(f'move dataset to {device}')
@@ -106,6 +106,18 @@ class DataSet(dict):
         step = N//n
         for var in vars:
             self[var] = self[var][::step]
+    
+    def filter(self, substr):
+        ''' return list of key that contains substr
+        '''
+        return [key for key in self.keys() if substr in key]
+    
+    def subsample_train(self, n, vars):
+        '''subsample first n row for training. 
+        add _train suffix to variable name
+        '''
+        for var in vars:
+            self[var+'_train'] = self[var][:n]
             
             
     

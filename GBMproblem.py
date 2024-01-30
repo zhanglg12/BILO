@@ -43,13 +43,13 @@ class GBMproblem():
         self.output_transform.register_buffer('L', torch.tensor(self.L))
         self.output_transform.forward = lambda X, u: self.ic(X, self.output_transform.x0, self.output_transform.L) + u * X[:,0:1]
 
+        self.dataset['X_res'].requires_grad_(True)  
         
 
     def ic(self, X, x0, L):
         # initial condition
         r2 = sumcol(torch.square((X[:, 1:self.dim] - x0)*L)) # this is in pixel scale, unit mm, 
         return 0.1*torch.exp(-0.1*r2)
-
 
     def residual(self, nn, X, phi, P, gradPphi, param: dict):
         
@@ -62,10 +62,9 @@ class GBMproblem():
         
         # Concatenate sliced tensors to form the input for the network if necessary
         nn_input = torch.cat(vars, dim=1)
-        
+       
         # Forward pass through the network
         u = nn(nn_input)
-        
         # Define a tensor of ones for grad_outputs
         v = torch.ones_like(u)
         
@@ -85,36 +84,38 @@ class GBMproblem():
         diff = param['rD'] * self.dataset['DW'] * (P * phi * sumcol(u_xx) + self.dataset['L'] * sumcol(gradPphi * u_x))
         res = phi * u_t - (prof + diff)
         return res, u
+    
+    
+    def get_res_pred(self, net):
+        # get residual and prediction
+        res, u_pred = self.residual(net, self.dataset['X_res_train'], self.dataset['phi_res_train'], self.dataset['P_res_train'], self.dataset['gradPphi_res_train'], net.params_dict)
+        return res, u_pred
 
+    def get_data_loss(self, net):
+        # get data loss
+        u_pred = net(self.dataset['X_dat_train'])
+        loss = torch.mean(torch.square(u_pred - self.dataset['ugt_dat_train']))
+        return loss
     
     def print_info(self):
         pass
     
-
-    def plot_scatter_pred(self, dataset, net, savedir=None):
-        x_dat = dataset['X_dat']
-        x_res = dataset['X_res']
+    def make_prediction(self, net):
+        # make prediction at original X_dat and X_res
+        x_dat = self.dataset['X_dat']
+        x_res = self.dataset['X_res']
         
         with torch.no_grad():
-            upred_xdat = net(x_dat)
-            upred_xres = net(x_res)
+            self.dataset['upred_xdat'] = net(x_dat)
+            self.dataset['upred_xres'] = net(x_res)
 
-        ax, fig = self.plot_scatter(x_dat, upred_xdat, fname = 'fig_upred_xdat.png', savedir=savedir)
-
-        ax, fig = self.plot_scatter(x_res, upred_xres, fname = 'fig_upred_xres.png', savedir=savedir)
+    def plot_scatter_pred(self, net, savedir=None):
+        self.dataset.to_np()        
+        ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_xdat'], fname = 'fig_upred_xdat.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_xres'], fname = 'fig_upred_xres.png', savedir=savedir)
         
-    
-
-
-    
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
 
-        # convert to numpy if tensor
-        if torch.is_tensor(X):
-            X = X.cpu().detach().numpy()
-        if torch.is_tensor(u):
-            u = u.cpu().detach().numpy()
-        
         x = X[:,1:]
         r = np.linalg.norm(x,axis=1)
         t = X[:,0]
@@ -132,10 +133,28 @@ class GBMproblem():
 
         return fig, ax
     
-    def visualize(self, dataset, net, savedir=None):
+    def visualize(self, net, savedir=None):
         # visualize the results
+        self.plot_scatter_pred(net, savedir=savedir)
+    
+    def setup_dataset(self, ds_opts):
+        ''' downsample for training'''
         
-        self.plot_scatter_pred(dataset, net, savedir=savedir)
+        # data loss
+        ndat_train = min(ds_opts['N_dat_train'], self.dataset['X_dat'].shape[0])
+        vars = self.dataset.filter('_dat')
+        self.dataset.subsample_train(ndat_train, vars)
+        print('downsample ', vars, ' to ', ndat_train)
+
+        # res loss
+        nres_train = min(ds_opts['N_res_train'], self.dataset['X_res'].shape[0])
+        vars = self.dataset.filter('_res')
+        self.dataset.subsample_train(nres_train, vars)
+        print('downsample ', vars, ' to ', nres_train)
+
+        
+        
+
 
 
 # simple test of the pde
@@ -157,16 +176,15 @@ if __name__ == "__main__":
     optobj.opts['nn_opts']['output_dim'] = prob.output_dim
 
     net = DensePoisson(**optobj.opts['nn_opts'],
-                output_transform=prob.output_transform, 
+                output_transform=prob.output_transform,
                 params_dict=prob.param).to(device)
-    
+
     ds = prob.dataset
     ds.to_device(device)
-
-    ds['X_res'].requires_grad_(True)
     res, u_pred = prob.residual(net, ds['X_res'], ds['phi_res'], ds['P_res'], ds['gradPphi_res'], net.params_dict)
 
-    prob.visualize(ds, net, savedir=optobj.opts['logger_opts']['save_dir'])
+    prob.make_prediction(net)
+    prob.visualize( net, savedir=optobj.opts['logger_opts']['save_dir'])
     
 
     # print 2 norm of res
