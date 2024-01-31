@@ -15,7 +15,7 @@ from util import *
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde,  loss_weigt_dict):
+    def __init__(self, net, pde,  loss_weight_dict):
 
         
         self.net = net
@@ -30,18 +30,20 @@ class lossCollection:
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
         
-        self.loss_weight = loss_weigt_dict # dict of active loss: weight
+        self.loss_weight = {} # dict of active loss: weight
         
         # collect keys with positive weights
         self.loss_active = []
-        for k in self.loss_weight.keys():
-            if self.loss_weight[k] is not None:
+        for k in self.loss_dict.keys():
+            if loss_weight_dict[k] is not None:
                 self.loss_active.append(k)
+                self.loss_weight[k] = loss_weight_dict[k]
     
         self.wloss_comp = {} # component of each loss, weighted
         self.wtotal = None # total loss for backprop
 
         self.idmx = None # identity matrix for computing gradient of residual w.r.t. parameter
+        self.msample = loss_weight_dict['msample']
     
 
     # def computeResidual(self):
@@ -121,6 +123,12 @@ class lossCollection:
         if self.idmx is None:
             n = self.res.shape[0]
             self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
+            # I = torch.eye(n)
+            # assert self.msample <= n, 'msample should be less than the number of residual'
+            # idx = torch.randperm(n)[:self.msample]
+            # self.idmx = I[idx].to(self.res.device)
+            
+            
 
         sum = 0.0        
         for pname in self.net.trainable_param:

@@ -4,6 +4,7 @@ from DataSet import DataSet
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+from util import generate_grf
     
 class FKproblem():
     def __init__(self, **kwargs):
@@ -91,9 +92,15 @@ class FKproblem():
         x_dat = self.dataset['X_dat']
         x_res = self.dataset['X_res']
         
+        x_dat_train = self.dataset['X_dat_train']
+        x_res_train = self.dataset['X_res_train']
+        
         with torch.no_grad():
             self.dataset['upred_dat'] = net(x_dat)
             self.dataset['upred_res'] = net(x_res)
+            self.dataset['upred_dat_train'] = net(x_dat_train)
+            self.dataset['upred_res_train'] = net(x_res_train)
+
 
     def plot_scatter_pred(self, savedir=None):
         self.dataset.to_np()        
@@ -123,21 +130,37 @@ class FKproblem():
         self.dataset.to_np()        
         ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_dat'], fname = 'fig_upred_dat.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['upred_dat_train'], fname = 'fig_upred_dat_train.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_res_train'], self.dataset['upred_res_train'], fname = 'fig_upred_res_train.png', savedir=savedir)
 
     def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''
         
         # data loss
         ndat_train = min(ds_opts['N_dat_train'], self.dataset['X_dat'].shape[0])
+        ds_opts['N_dat_train'] = ndat_train #update the number of training data if downsampled
         vars = self.dataset.filter('_dat')
         self.dataset.subsample_unif_astrain(ndat_train, vars)
         print('unif downsample ', vars, ' to ', ndat_train)
 
         # res loss
         nres_train = min(ds_opts['N_res_train'], self.dataset['X_res'].shape[0])
+        ds_opts['N_res_train'] = nres_train #update the number of training data if downsampled
         vars = self.dataset.filter('_res')
         self.dataset.subsample_unif_astrain(nres_train, vars)
         print('unif downsample ', vars, ' to ', nres_train)
 
+
+        if noise_opts['use_noise']:
+            print('add noise to training data')
+            x = self.dataset['X_dat_train'][:,1:2]
+            noise = torch.zeros_like(self.dataset['u_dat_train'])
+    
+            tmp = generate_grf(x, noise_opts['variance'], noise_opts['length_scale'])
+            noise[:,0] = tmp.squeeze()
+
+            self.dataset['noise'] = noise
+            self.dataset['u_dat_train'] = self.dataset['u_dat_train'] + self.dataset['noise']
+            
 
     

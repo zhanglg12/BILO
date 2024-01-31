@@ -21,6 +21,16 @@ class Trainer:
         # early stopping
         self.estop = EarlyStopping(**self.opts)
 
+        self.loss_net = ['res']
+        self.loss_pde = ['data']
+        
+        if opts['net_data']:
+            # use data loss for network weights
+            self.loss_net.append('data')
+        if 'resgrad' in self.lossCollection.loss_active:
+            self.loss_net.append('resgrad')
+
+
         
 
     def log_stat(self, wloss_comp, epoch,):
@@ -44,6 +54,8 @@ class Trainer:
             self.ftrain = self.train_vanilla
         
         elif traintype == 'adj-init':
+            # single optimizer for all parameters
+            # learning rate for pde parameter is 0
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': 0.0}
@@ -53,6 +65,7 @@ class Trainer:
             
 
         elif traintype == 'adj-simu':
+            # single optimizer for all parameters, different learning rate for net and pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
@@ -60,6 +73,7 @@ class Trainer:
             self.optimizer['allparam'] = optim.Adam(optim_param_group, amsgrad=True)
             self.ftrain = self.train_simu
         elif traintype == 'adj-bi':
+            # two optimizer, one for net, one for pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
@@ -70,6 +84,7 @@ class Trainer:
             self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'],amsgrad=True)
             self.ftrain = self.train_bilevel
         elif traintype == 'adj-bi1opt':
+            # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
@@ -104,7 +119,10 @@ class Trainer:
             self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
 
-            loss_net = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            loss_net = 0
+            for key in self.loss_net:
+                loss_net += self.lossCollection.wloss_comp[key]
+
             wloss_comp.update(self.lossCollection.wloss_comp)
             wloss_comp['lowertot'] = loss_net
 
@@ -145,7 +163,10 @@ class Trainer:
             self.optimizer['netparam'].zero_grad()
             self.lossCollection.getloss()
 
-            loss_lower = self.lossCollection.wloss_comp['res'] + self.lossCollection.wloss_comp['resgrad']
+            loss_lower = 0
+            for key in self.loss_net:
+                loss_lower += self.lossCollection.wloss_comp[key]
+
             loss_upper = self.lossCollection.wloss_comp['data']
 
             wloss_comp.update(self.lossCollection.wloss_comp)

@@ -111,9 +111,14 @@ class GBMproblem():
         x_dat = self.dataset['X_dat']
         x_res = self.dataset['X_res']
         
+        x_dat_train = self.dataset['X_dat_train']
+        x_res_train = self.dataset['X_res_train']
+        
         with torch.no_grad():
             self.dataset['upred_dat'] = net(x_dat)
             self.dataset['upred_res'] = net(x_res)
+            self.dataset['upred_dat_train'] = net(x_dat_train)
+            self.dataset['upred_res_train'] = net(x_res_train)
 
             
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
@@ -140,6 +145,8 @@ class GBMproblem():
         self.dataset.to_np()        
         ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_dat'], fname = 'fig_upred_dat.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['upred_dat_train'], fname = 'fig_upred_dat_train.png', savedir=savedir)
+        ax, fig = self.plot_scatter(self.dataset['X_res_train'], self.dataset['upred_res_train'], fname = 'fig_upred_res_train.png', savedir=savedir)
     
     def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''

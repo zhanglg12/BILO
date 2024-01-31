@@ -61,7 +61,7 @@ default_opts = {
         # for bi-level training
         'tol_lower': 1e-2, # lower level tol
         'max_iter_lower':100,
-        
+        'net_data':False, # use data loss for network weights
     },
     'noise_opts':{
         'use_noise': False,
@@ -73,6 +73,7 @@ default_opts = {
         'resgrad': 0.001,
         'data': 1.0,
         'paramgrad': None,
+        'msample':100, #number of samples for resgrad
     }
 }
 
@@ -237,7 +238,7 @@ class Options:
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = None
             # for vanilla PINN, nn does not include parameter
-            self.opts['nn_opts']['with_param'] = False
+            # self.opts['nn_opts']['with_param'] = False
         
         if self.opts['traintype'] == 'fwd':
             # for fwd problem, nn does not include parameter, no training on parameter
