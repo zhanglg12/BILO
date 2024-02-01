@@ -2,10 +2,12 @@
 
 # for training the network
 # need: options, network, pde, dataset, lossCollection
+import torch.optim as optim
+
 from lossCollection import *
 from DensePoisson import *
 from Logger import Logger
-import torch.optim as optim
+from util import get_mem_stats
 
 class Trainer:
     def __init__(self, opts, net, pde, lossCollection, logger:Logger):
@@ -13,7 +15,8 @@ class Trainer:
         self.logger = logger
         self.net = net
         self.pde = pde
-        
+        self.info = {}
+
         self.lossCollection = lossCollection
         self.device = set_device()
         self.optimizer = {}
@@ -29,11 +32,14 @@ class Trainer:
             self.loss_net.append('data')
         if 'resgrad' in self.lossCollection.loss_active:
             self.loss_net.append('resgrad')
-
-
         
+        self.info['total_params'] = sum(p.numel() for p in self.net.parameters())
+        self.info['trainable_params'] = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
+        self.logger.log_params(self.info)
 
-    def log_stat(self, wloss_comp, epoch,):
+    
+
+    def log_stat(self, wloss_comp, epoch):
         # log statistics
         self.logger.log_metrics(wloss_comp, step=epoch)
         self.logger.log_metrics(self.net.params_dict, step=epoch)
@@ -105,8 +111,10 @@ class Trainer:
             self.ftrain()
         except KeyboardInterrupt:
             print('KeyboardInterrupt')
-        
-
+        finally:
+            mem = get_mem_stats()
+            print('\n memory usage ')
+            self.logger.log_params(mem)
 
     def train_simu(self):
         '''
@@ -133,7 +141,7 @@ class Trainer:
             if epoch % self.opts['print_every'] == 0 or stophere:
                 self.log_stat(wloss_comp, epoch)
             if stophere:
-                break  
+                break
             
             # take gradient of data loss w.r.t pde parameter
             self.set_grad(self.net.param_pde, self.lossCollection.wloss_comp['data'])
@@ -156,7 +164,7 @@ class Trainer:
                 self.logger.log_metrics({'lower':islower}, step=epoch)
         epoch = 0
         wloss_comp = {}
-        
+
         while True:
 
             self.optimizer['allparam'].zero_grad()
@@ -181,7 +189,7 @@ class Trainer:
 
 
             if stophere:
-                break  
+                break
 
 
             ### lower level
@@ -399,11 +407,11 @@ class Trainer:
         net_path = self.logger.gen_path("net.pth")
         torch.save(self.net.state_dict(), net_path)
         print(f'save model to {net_path}')
-    
+
     def restore_net(self, net_path):
         self.net.load_state_dict(torch.load(net_path))
         print(f'restore model from {net_path}')
-    
+
     def save_dataset(self):
         # save dataset
         self.pde.make_prediction(self.net)
@@ -424,55 +432,53 @@ class Trainer:
 
         fnet = os.path.join(dirname, 'net.pth')
         self.restore_net(fnet)
-        
-                
-    
+
 # simple test on training routine
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    optobj = Options()
-    # change default for testing
-    optobj.opts['flags'] = 'smallrun,local'
-    optobj.opts['pde_opts']['problem'] = 'poisson'
+#     optobj = Options()
+#     # change default for testing
+#     optobj.opts['flags'] = 'smallrun,local'
+#     optobj.opts['pde_opts']['problem'] = 'poisson'
 
-    optobj.parse_args(*sys.argv[1:])
+#     optobj.parse_args(*sys.argv[1:])
 
      
-    device = set_device('cuda')
-    set_seed(0)
+#     device = set_device('cuda')
+#     set_seed(0)
 
-    # setup pde
-    pde = create_pde_problem(**(optobj.opts['pde_opts']),datafile=optobj.opts['dataset_opts']['datafile'])
-    pde.print_info()
+#     # setup pde
+#     pde = create_pde_problem(**(optobj.opts['pde_opts']),datafile=optobj.opts['dataset_opts']['datafile'])
+#     pde.print_info()
 
-    # setup logger
-    logger = Logger(optobj.opts['logger_opts']) 
+#     # setup logger
+#     logger = Logger(optobj.opts['logger_opts']) 
 
-    # setup dataset
-    dataset = create_dataset_from_pde(pde, optobj.opts['dataset_opts'])
+#     # setup dataset
+#     dataset = create_dataset_from_pde(pde, optobj.opts['dataset_opts'])
 
-    # setup network
-    net = DensePoisson(**optobj.opts['nn_opts'],
-                                output_transform=pde.output_transform,
-                                params_dict=pde.param)
+#     # setup network
+#     net = DensePoisson(**optobj.opts['nn_opts'],
+#                                 output_transform=pde.output_transform,
+#                                 params_dict=pde.param)
 
     
-    # set up los
-    lc = lossCollection(net, pde, optobj.opts['weights'])
+#     # set up los
+#     lc = lossCollection(net, pde, optobj.opts['weights'])
 
-    print_dict(optobj.opts)
-    ### basic
+#     print_dict(optobj.opts)
+#     ### basic
     
-    trainer = Trainer(optobj.opts['train_opts'], net, pde, lc, logger)
+#     trainer = Trainer(optobj.opts['train_opts'], net, pde, lc, logger)
     
-    trainer.config_train(optobj.opts['traintype'])
+#     trainer.config_train(optobj.opts['traintype'])
 
-    if optobj.opts['restore']:
-        trainer.restore(optobj.opts['restore'])
+#     if optobj.opts['restore']:
+#         trainer.restore(optobj.opts['restore'])
 
-    trainer.train()
+#     trainer.train()
 
-    trainer.save()
+#     trainer.save()
 
 
 

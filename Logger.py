@@ -47,13 +47,19 @@ class Logger:
     def close(self):
         if self.opts['use_mlflow']:
             mlflow.end_run()
-    
+
     def log_options(self, options: dict):
         # save optioins as json
         if self.opts['use_mlflow']:
             mlflow.log_params(flatten(options))
-        savedict(options, self.gen_path('options.json'))    
-        
+        savedict(options, self.gen_path('options.json'))
+    
+    def log_params(self, params: dict):
+        if self.opts['use_mlflow']:
+            mlflow.log_params(flatten(params))
+        else:
+            print(params)
+
     def get_dir(self):
         # get artifact dir
         if self.opts['use_mlflow']:
