@@ -37,16 +37,16 @@ class FKproblem():
 
 
     def residual(self, nn, X, param: dict):
-        
+
         t = X[:, 0:1]
         x = X[:, 1:2]
-        
+
         # Concatenate sliced tensors to form the input for the network if necessary
         nn_input = torch.cat((t,x), dim=1)
-        
+
         # Forward pass through the network
         u_pred = nn(nn_input)
-        
+
         # Define a tensor of ones for grad_outputs
         v = torch.ones_like(u_pred)
         

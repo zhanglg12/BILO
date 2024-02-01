@@ -1,16 +1,14 @@
 # define problems for PDE
 import torch
-from DataSet import DataSet
-
-
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-from util import generate_grf
 
-from FKproblem import FKproblem
-from GBMproblem import GBMproblem
-from PoissonProblem import PoissonProblem
+from BaseProblem import BaseProblem
+from DataSet import DataSet
+from util import generate_grf, add_noise
+
+
 
 
 '''
@@ -37,7 +35,7 @@ tstop = 25
 y0 = [2 0];
 '''
 
-class SimpleODEProblem():
+class SimpleODEProblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
         self.input_dim = 1
@@ -45,18 +43,13 @@ class SimpleODEProblem():
 
         self.dataset = DataSet(kwargs['datafile'])
         # get parameter from mat file
-        # check empty string
         self.param = {}
-        if kwargs['datafile']:
-            self.param['a11'] = self.dataset['A'][0,0]
-            self.param['a12'] = self.dataset['A'][0,1]
-            self.param['a21'] = self.dataset['A'][1,0]
-            self.param['a22'] = self.dataset['A'][1,1]
-            self.p = self.dataset['p']
-            self.y0 = self.dataset['y0']
-        else:
-            # error
-            raise ValueError('no dataset provided for SimpleODEProblem')
+        self.param['a11'] = self.dataset['A'][0,0]
+        self.param['a12'] = self.dataset['A'][0,1]
+        self.param['a21'] = self.dataset['A'][1,0]
+        self.param['a22'] = self.dataset['A'][1,1]
+        self.p = self.dataset['p']
+        self.y0 = self.dataset['y0']
 
         # tag for plotting, ode: plot component, 2d: plot traj, exact: have exact solution
         self.tag = ['ode','2d']
@@ -70,8 +63,9 @@ class SimpleODEProblem():
 
 
     def residual(self, nn, x, param:dict):
+        x.requires_grad_(True)
+        
         u_pred = nn(x)  # Assuming x.shape is (batch, 1)
-
         # Initialize tensors
         u_t = torch.zeros_like(u_pred)
         res = torch.zeros_like(u_pred)
@@ -88,8 +82,6 @@ class SimpleODEProblem():
         
         return res, u_pred
 
-        
-    
     def print_info(self):
         # print info of pde
         # print all parameters
@@ -171,5 +163,18 @@ class SimpleODEProblem():
 
         return fig, ax
 
+    def setup_dataset(self, dsopt, noise_opt):
+        # data loss
+        if dsopt['N_dat_train'] < self.dataset['x_dat_train'].shape[0]:
+            print('downsample training data')
+            self.dataset.uniform_downsample(dsopt['N_dat_train'], ['x_dat_train','u_dat_train'])
+        
+        if dsopt['N_res_train'] < self.dataset['x_res_train'].shape[0]:
+            print('downsample residual data')
+            self.dataset.uniform_downsample(dsopt['N_res_train'], ['x_res_train'])
+
+        if noise_opt['use_noise']:
+            print('add noise to training data')
+            add_noise(self.dataset, noise_opt)
 
     

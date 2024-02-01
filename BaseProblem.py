@@ -75,7 +75,7 @@ class BaseProblem(ABC):
         pass
 
     def plot_variation(self, savedir=None):
-        # plot variation of net w.r.t each parameter        
+        # plot variation of net w.r.t each parameter
 
         x_test = self.dataset['x_dat_test']
 
