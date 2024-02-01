@@ -80,13 +80,20 @@ class DataSet(dict):
             if isinstance(value, np.ndarray):
                 self[key] = torch.tensor(value,dtype=torch.float32)
     
-    def to_np(self):
+    def to_np(self, d = None):
         '''convert tensor to cpu
         '''
-        print('move dataset to cpu')
-        for key, value in self.items():
+        if d is None:
+            d = self
+            print('move dataset to cpu')
+
+        for key, value in d.items():
             if isinstance(value, torch.Tensor):
-                self[key] = value.cpu().detach().numpy()
+                d[key] = value.cpu().detach().numpy()
+            # if dictionary, recursively convert
+            elif isinstance(value, dict):
+                self.to_np(d = value)
+                
     
     def to_device(self, device):
         print(f'move dataset to {device}')
