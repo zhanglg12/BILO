@@ -25,15 +25,17 @@ class Trainer:
         # early stopping
         self.estop = EarlyStopping(**self.opts)
 
-        self.loss_net = ['res']
+        self.loss_net = ['res','resgrad','fullresgrad']
         self.loss_pde = ['data']
         
         if opts['net_data']:
             # use data loss for network weights
             self.loss_net.append('data')
-        if 'resgrad' in self.lossCollection.loss_active:
-            self.loss_net.append('resgrad')
-        
+
+        # remove inactive loss
+        for key in self.loss_net:
+            if key not in self.lossCollection.loss_active:
+                self.loss_net.remove(key)
         
         self.info['num_params'] = sum(p.numel() for p in self.net.parameters())
         self.info['num_train_params'] = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
