@@ -88,13 +88,13 @@ class BaseProblem(ABC):
 
                 # plot prediction
                 u_pred = self.dataset['u_pred_var'][varname][delta]['pred']
-                ax.plot(x_test, u_pred, label=f'NN \Delta {varname} = {delta:.2f}')
+                ax.plot(x_test, u_pred, label=f'NN $\Delta${varname} = {delta:.2f}')
 
                 # plot exact if available
                 if 'exact' in self.tag:
                     color = ax.lines[-1].get_color()
                     u_exact = self.dataset['u_pred_var'][varname][delta]['exact']
-                    ax.plot(x_test, u_exact, label=f'exact \Delta {varname} = {delta:.2f}',color=color,linestyle='--')
+                    ax.plot(x_test, u_exact, label=f'exact $\Delta${varname} = {delta:.2f}',color=color,linestyle='--')
 
             ax.legend(loc="best")
 

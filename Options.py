@@ -71,6 +71,7 @@ default_opts = {
     'weights': {
         'res': 1.0,
         'resgrad': 0.001,
+        'fullresgrad': None,
         'data': 1.0,
         'paramgrad': None,
         'msample':100, #number of samples for resgrad

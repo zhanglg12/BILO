@@ -10,17 +10,17 @@ residual loss: residual of pde
 residual gradient loss: derivative of residual w.r.t. pde parameter
 data loss: MSE of data
 '''
-
-from util import *
+import torch
+from util import mse, set_device, set_seed
 
 class lossCollection:
     # loss, parameter, and optimizer
     def __init__(self, net, pde,  loss_weight_dict):
 
-        
+
         self.net = net
         self.pde = pde
-    
+
         # intermediate results for residual loss
         self.res = None
         self.mse_res = None
@@ -28,10 +28,11 @@ class lossCollection:
         self.u_pred = None
 
         # collection of all loss functions
-        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
-        
+        self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 
+        'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
+
         self.loss_weight = {} # dict of active loss: weight
-        
+
         # collect keys with positive weights
         self.loss_active = []
         for k in self.loss_dict.keys():
@@ -43,6 +44,7 @@ class lossCollection:
         self.wtotal = None # total loss for backprop
 
         self.idmx = None # identity matrix for computing gradient of residual w.r.t. parameter
+        self.idv = None # sampling matrix
         self.msample = loss_weight_dict['msample']
     
 
@@ -117,23 +119,48 @@ class lossCollection:
     #     return mse
 
     def resgradloss(self):
-        # compute gradient of residual w.r.t. parameter   
+        # compute gradient of residual w.r.t. parameter on a random sample of residual points
         self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
 
-        if self.idmx is None:
+        if self.idv is None:
             n = self.res.shape[0]
-            # self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
-            I = torch.eye(n)
-            assert self.msample <= n, 'msample should be less than the number of residual'
-            idx = torch.randperm(n)[:self.msample]
-            self.idmx = I[idx].to(self.res.device)            
+            m = self.msample
+            assert m <= n, 'msample should be less than the number of residual'
+            # I = torch.eye(n)
+            # idx = torch.randperm(n)[:m]
+            # self.idv = I[idx].to(self.res.device)
+            
+        # second method, sample JL matrix, m by n with iid Gaussian
+        n = self.res.shape[0]
+        m = self.msample
+        self.idv = torch.randn(m, n)/torch.sqrt(torch.tensor(m))
+        self.idv = self.idv.to(self.res.device)
+            
 
         resgradmse = 0.0        
         for pname in self.net.trainable_param:
             for j in range(self.pde.output_dim):
-                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=self.idmx)[0]
-                resgradmse += torch.mean(torch.pow(tmp, 2))
-        return resgradmse
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], grad_outputs=self.idv,
+                create_graph=True, is_grads_batched=True, retain_graph=True)[0]
+                resgradmse += torch.sum(torch.pow(tmp, 2))
+        return resgradmse/n
+
+    def fullresgradloss(self):
+        # compute gradient of residual w.r.t. parameter on every residual point.
+        # very memory intensive
+        self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
+
+        n = self.res.shape[0]
+        if self.idmx is None:
+            self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
+
+        resgradmse = 0.0        
+        for pname in self.net.trainable_param:
+            for j in range(self.pde.output_dim):
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], grad_outputs=self.idmx,
+                create_graph=True, is_grads_batched=True, retain_graph=True)[0]
+                resgradmse += torch.sum(torch.pow(tmp, 2))
+        return resgradmse/n
 
     # to prevent derivative of u w.r.t. parameter to be 0
     # for now, just fix the weight of the embedding.
