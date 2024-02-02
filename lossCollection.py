@@ -122,20 +122,18 @@ class lossCollection:
 
         if self.idmx is None:
             n = self.res.shape[0]
-            self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
-            # I = torch.eye(n)
-            # assert self.msample <= n, 'msample should be less than the number of residual'
-            # idx = torch.randperm(n)[:self.msample]
-            # self.idmx = I[idx].to(self.res.device)
-            
-            
+            # self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
+            I = torch.eye(n)
+            assert self.msample <= n, 'msample should be less than the number of residual'
+            idx = torch.randperm(n)[:self.msample]
+            self.idmx = I[idx].to(self.res.device)            
 
-        sum = 0.0        
+        resgradmse = 0.0        
         for pname in self.net.trainable_param:
             for j in range(self.pde.output_dim):
                 tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], create_graph=True, is_grads_batched=True,grad_outputs=self.idmx)[0]
-                sum += torch.mean(torch.pow(tmp, 2))
-        return sum
+                resgradmse += torch.mean(torch.pow(tmp, 2))
+        return resgradmse
 
     # to prevent derivative of u w.r.t. parameter to be 0
     # for now, just fix the weight of the embedding.
@@ -175,8 +173,10 @@ class EarlyStopping:
         self.best_loss = None
         self.counter_param = 0
         self.counter_loss = 0
+        self.epoch = 0
 
     def __call__(self, loss, params, epoch):
+        self.epoch = epoch
         if epoch >= self.max_iter:
             print('\nStop due to max iteration')
             return True

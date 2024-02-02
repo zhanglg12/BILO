@@ -2,12 +2,13 @@
 
 # for training the network
 # need: options, network, pde, dataset, lossCollection
+import os
+import time
+import torch
 import torch.optim as optim
-
-from lossCollection import *
-from DensePoisson import *
+from lossCollection import lossCollection, EarlyStopping
 from Logger import Logger
-from util import get_mem_stats
+from util import get_mem_stats, set_device, set_seed, print_dict
 
 class Trainer:
     def __init__(self, opts, net, pde, lossCollection, logger:Logger):
@@ -33,8 +34,8 @@ class Trainer:
         if 'resgrad' in self.lossCollection.loss_active:
             self.loss_net.append('resgrad')
         
-        self.info['total_params'] = sum(p.numel() for p in self.net.parameters())
-        self.info['trainable_params'] = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
+        self.info['num_params'] = sum(p.numel() for p in self.net.parameters())
+        self.info['num_train_params'] = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
         self.logger.log_params(self.info)
 
     
@@ -107,14 +108,18 @@ class Trainer:
         self.pde.dataset.to_device(self.device)
 
         print(f'train with: {self.traintype}')
+        start = time.time()
         try:
             self.ftrain()
         except KeyboardInterrupt:
             print('KeyboardInterrupt')
         finally:
+            end = time.time()
+            sec_per_step = (end - start) / self.estop.epoch
             mem = get_mem_stats()
             print('\n memory usage ')
             self.logger.log_params(mem)
+            self.logger.log_params({'sec_per_step':sec_per_step})
 
     def train_simu(self):
         '''
