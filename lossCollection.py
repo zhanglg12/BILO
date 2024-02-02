@@ -15,7 +15,7 @@ from util import mse, set_device, set_seed
 
 class lossCollection:
     # loss, parameter, and optimizer
-    def __init__(self, net, pde,  loss_weight_dict):
+    def __init__(self, net, pde,  loss_weight_dict, loss_opts):
 
 
         self.net = net
@@ -45,7 +45,7 @@ class lossCollection:
 
         self.idmx = None # identity matrix for computing gradient of residual w.r.t. parameter
         self.idv = None # sampling matrix
-        self.msample = loss_weight_dict['msample']
+        self.msample = loss_opts['msample']
     
 
     # def computeResidual(self):

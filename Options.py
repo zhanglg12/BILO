@@ -24,8 +24,11 @@ default_opts = {
     },
     'pde_opts': {
         'problem': 'simpleode',
-        'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
         'use_res': False, # for GBM problem, use (X_res u_res), i.e., full time range, for data loss
+        'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
+        'trainable_param': '', # list of trainable parameters, e.g. 'D,rho'
+        'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
+        'datafile': '',
     },
     'nn_opts': {
         'depth': 4,
@@ -35,16 +38,14 @@ default_opts = {
         'use_resnet': False,
         'with_param': True,
         'fourier':False,
-        'trainable_param': '',
         'siren': False,
     },
-    'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
+    
     'dataset_opts': {
         'N_res_train': 100,
         'N_res_test': 100,
         'N_dat_train': 100,
         'N_dat_test': 100,
-        'datafile': '',
     },
     'train_opts': {
         'print_every': 20,
@@ -74,6 +75,8 @@ default_opts = {
         'fullresgrad': None,
         'data': 1.0,
         'paramgrad': None,
+    },
+    'loss_opts': {
         'msample':100, #number of samples for resgrad
     }
 }
@@ -124,9 +127,9 @@ def update_nested_dict_unique_key(nested_dict, target_key, value):
 
 def update_nested_dict(nested_dict, target_key, value):
     if '.' in target_key:
-        update_nested_dict_full_key(nested_dict, target_key, value)
+        return update_nested_dict_full_key(nested_dict, target_key, value)
     else:
-        update_nested_dict_unique_key(nested_dict, target_key, value)
+        return update_nested_dict_unique_key(nested_dict, target_key, value)
 
 
 
@@ -243,8 +246,8 @@ class Options:
         
         if self.opts['traintype'] == 'fwd':
             # for fwd problem, nn does not include parameter, no training on parameter
-            self.opts['nn_opts']['with_param'] = False
-            self.opts['nn_opts']['trainable_param'] = ''
+            # self.opts['nn_opts']['with_param'] = False
+            self.opts['pde_opts']['trainable_param'] = ''
             self.opts['weights']['data'] = None
         
         if self.opts['traintype'].startswith('adj'):
@@ -252,22 +255,22 @@ class Options:
             self.opts['nn_opts']['with_param'] = True
         
         # convert trainable param to list of string, split by ','
-        if self.opts['nn_opts']['trainable_param'] != '':
-            self.opts['nn_opts']['trainable_param'] = self.opts['nn_opts']['trainable_param'].split(',')
+        if self.opts['pde_opts']['trainable_param'] != '':
+            self.opts['pde_opts']['trainable_param'] = self.opts['pde_opts']['trainable_param'].split(',')
         else:
-            self.opts['nn_opts']['trainable_param'] = []
+            self.opts['pde_opts']['trainable_param'] = []
         
-        if self.opts['init_param'] != '':
-            self.opts['init_param'] = self.convert_to_dict(self.opts['init_param'])
+        if self.opts['pde_opts']['init_param'] != '':
+            self.opts['pde_opts']['init_param'] = self.convert_to_dict(self.opts['pde_opts']['init_param'])
 
         
         # has to be after init_param is processed
         # for poisson problem, set init_param and exact_param
         if self.opts['pde_opts']['problem'] == 'poisson':
-            self.opts['nn_opts']['trainable_param'] = ['D']
+            self.opts['pde_opts']['trainable_param'] = ['D']
             if self.opts['traintype'] == 'basic':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
-                self.opts['init_param'] = {'D':1.0}
+                self.opts['pde_opts']['init_param'] = {'D':1.0}
             # init problem, use init D to gen data
             if self.opts['traintype'] == 'adj-init':
                 self.opts['pde_opts']['exact_param'] = {'D':1.0}

@@ -1,17 +1,24 @@
 # base class for PoissonProblem and SimpleODEProblem
 # visualization method for 1d problem
-import torch
 import os
-import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
+
+import torch
+import matplotlib.pyplot as plt
 
 from util import generate_grf, to_double, add_noise
 from DataSet import DataSet
+from DensePoisson import DensePoisson
 
 class BaseProblem(ABC):
     def __init__(self, **kwargs):
         super().__init__()
         self.dataset = None
+        self.input_dim = None
+        self.output_dim = None
+        self.output_transform = None
+        self.param = {}
+        self.opts = {}
         self.tag = []
 
     @abstractmethod
@@ -36,6 +43,24 @@ class BaseProblem(ABC):
             self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'])
 
         self.prediction_variation(net)
+
+    def setup_network(self, nn_opts):
+        '''setup network, get network structure if restore'''
+        # first copy self.pde.param, which include all pde-param in network
+        # then update by init_param if provided
+        nn_opts['input_dim'] = self.input_dim
+        nn_opts['output_dim'] = self.output_dim
+        pde_param = self.param.copy()
+        init_param = self.opts['init_param']
+        if init_param is not None:
+            pde_param.update(init_param)
+
+        net = DensePoisson(**nn_opts,
+                            output_transform=self.output_transform,
+                            params_dict=pde_param,
+                            trainable_param = self.opts['trainable_param'])
+        return net
+
 
 
     def prediction_variation(self, net):

@@ -180,7 +180,7 @@ if __name__ == "__main__":
     device = set_device('cuda')
     set_seed(0)
     
-    prob = GBMproblem(datafile=optobj.opts['dataset_opts']['datafile'])
+    prob = GBMproblem(datafile=optobj.opts['pde_opts']['datafile'])
     prob.print_info()
 
     optobj.opts['nn_opts']['input_dim'] = prob.input_dim

@@ -11,14 +11,12 @@ import mlflow
 from Options import *
 from util import *
 
-from DensePoisson import *
 
-from MlflowHelper import MlflowHelper
-from DataSet import DataSet
-from Problems import *
-from lossCollection import *
+from DensePoisson import load_artifact
+from Problems import create_pde_problem
+from lossCollection import lossCollection
 
-from PlotHelper import *
+from PlotHelper import PlotHelper
 from Logger import Logger
 from Trainer import Trainer
 
@@ -30,7 +28,7 @@ class Engine:
         self.restore_artifacts = {}
         self.logger = None
 
-        self.lossCollection = {}
+        
         self.logger = None
         self.trainer = None
 
@@ -41,7 +39,7 @@ class Engine:
 
     def setup_problem(self):
         # setup pde problem
-        self.pde = create_pde_problem(**(self.opts['pde_opts']),datafile=self.opts['dataset_opts']['datafile'])
+        self.pde = create_pde_problem(**(self.opts['pde_opts']))
         self.pde.setup_dataset(self.opts['dataset_opts'], self.opts['noise_opts'])
         self.pde.dataset.to_device(self.device)
         self.pde.print_info()
@@ -87,59 +85,11 @@ class Engine:
     
     def setup_network(self):
         '''setup network, get network structure if restore'''
-        
-        self.opts['nn_opts']['input_dim'] = self.pde.input_dim
-        self.opts['nn_opts']['output_dim'] = self.pde.output_dim
-
-        # first copy self.pde.param, which include all pde-param in network
-        # then update by init_param if provided
-        pde_param = self.pde.param.copy()
-        init_param = self.opts['init_param']
-        if init_param is not None:
-            pde_param.update(init_param)
-
-        self.net = DensePoisson(**self.opts['nn_opts'],
-                                output_transform=self.pde.output_transform,
-                                params_dict=pde_param)
+        self.net = self.pde.setup_network(nn_opts=self.opts['nn_opts'])
         self.net.to(self.device)
-        
-
-    # def create_dataset_from_file(self):
-    #     dsopt = self.opts['dataset_opts']
-    #     self.dataset = DataSet()
-    #     self.dataset.readmat(dsopt['datafile'])
-        
-    
-    # def setup_data(self):
-    #     '''setup data from file or from PDE
-    #     u_dat_train are subject to noise
-    #     '''
-    #     if self.opts['dataset_opts']['datafile'] == '':
-    #         # when exact pde solution is avialble, use it to create dataset
-    #         print('create dataset from pde')
-    #         self.dataset = create_dataset_from_pde(self.pde, self.opts['dataset_opts'])
-    #     else:
-    #         print('create dataset from file')
-    #         self.create_dataset_from_file()
-
-    #     # down sample training data 
-    #     if self.opts['dataset_opts']['N_dat_train'] < self.dataset['x_dat_train'].shape[0]:
-    #         print('downsample training data')
-    #         self.dataset.uniform_downsample(self.opts['dataset_opts']['N_dat_train'], ['x_dat_train','u_dat_train'])
-        
-    #     if self.opts['dataset_opts']['N_res_train'] < self.dataset['x_res_train'].shape[0]:
-    #         print('downsample residual data')
-    #         self.dataset.uniform_downsample(self.opts['dataset_opts']['N_res_train'], ['x_res_train'])
-
-    #     if self.opts['noise_opts']['use_noise']:
-    #         print('add noise to training data')
-    #         add_noise(self.dataset, self.opts['noise_opts'])
-
-    #     self.dataset.to_device(self.device)
-        
 
     def setup_trainer(self):
-        self.lossCollection = lossCollection(self.net, self.pde, self.opts['weights'])
+        self.lossCollection = lossCollection(self.net, self.pde, self.opts['weights'], self.opts['loss_opts'])
         self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.lossCollection, self.logger)
         self.trainer.config_train(self.opts['traintype'])
 

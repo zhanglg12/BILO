@@ -16,7 +16,8 @@ class PoissonProblem(BaseProblem):
         self.input_dim = 1
         self.output_dim = 1
         self.tag=['exact']
-
+        
+        self.opts=kwargs
         # default 1
         self.p = 1
 

@@ -17,8 +17,7 @@ class DensePoisson(nn.Module):
                 use_resnet=False, with_param=False, params_dict=None, 
                 fourier=False,
                 siren=False,
-                trainable_param=[]
-                ):
+                trainable_param=[]):
         super().__init__()
         
         
@@ -34,19 +33,7 @@ class DensePoisson(nn.Module):
         # need ParameterDict to make it registered, otherwise to(device) will not automatically move it to device
         tmp = {k: nn.Parameter(torch.tensor([[v]])) for k, v in params_dict.items()}
         self.params_dict = nn.ParameterDict(tmp)
-        
 
-        self.trainable_param = trainable_param
-        if self.trainable_param:
-            # only train part of the parameters
-            # trainable_param is a list of parameter names
-            for name, param in self.params_dict.items():
-                if name not in trainable_param:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
-
-       
 
         if self.fourier:
             print('Using Fourier Features')
@@ -72,14 +59,26 @@ class DensePoisson(nn.Module):
             for embedding_weights in self.param_embeddings.parameters():
                 embedding_weights.requires_grad = False
 
-
-         # activation function
+        # activation function
         if siren:
             self.act = torch.sin
             self.siren_init()
         else:
             self.act = torch.tanh
 
+        ### setup trainable parameters
+
+        # trainable_param is a list of parameter names
+        # only train part of the parameters
+        self.trainable_param = trainable_param
+        if self.trainable_param:    
+            for name, param in self.params_dict.items():
+                if name not in trainable_param:
+                    param.requires_grad = False
+                else:
+                    param.requires_grad = True
+
+       
         # separate parameters for the neural net and the PDE parameters
         # neural net parameter exclude parameter embedding and fourier feature embedding layer
         self.param_net = list(self.input_layer.parameters()) +\
@@ -208,38 +207,38 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 
 # simple test of the network
 # creat a network, compute residual, compute loss, no training
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
     
-    optobj = Options()
-    optobj.parse_args(*sys.argv[1:])
+#     optobj = Options()
+#     optobj.parse_args(*sys.argv[1:])
     
 
-    device = set_device('cuda')
-    set_seed(0)
+#     device = set_device('cuda')
+#     set_seed(0)
     
-    prob = create_pde_problem(**optobj.opts['pde_opts'],datafile=optobj.opts['dataset_opts']['datafile'])
-    prob.print_info()
+#     prob = create_pde_problem(**optobj.opts['pde_opts'])
+#     prob.print_info()
 
-    optobj.opts['nn_opts']['input_dim'] = prob.input_dim
-    optobj.opts['nn_opts']['output_dim'] = prob.output_dim
+#     optobj.opts['nn_opts']['input_dim'] = prob.input_dim
+#     optobj.opts['nn_opts']['output_dim'] = prob.output_dim
 
-    net = DensePoisson(**optobj.opts['nn_opts'],
-                output_transform=prob.output_transform, 
-                params_dict=prob.param).to(device)
+#     net = DensePoisson(**optobj.opts['nn_opts'],
+#                 output_transform=prob.output_transform, 
+#                 params_dict=prob.param).to(device)
     
-    dataset = {}
-    x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
-    x.requires_grad_(True)
-    y = prob.u_exact(x, prob.param)
-    res, u_pred = prob.residual(net, x, net.params_dict)
+#     dataset = {}
+#     x = torch.linspace(0, 1, 20).view(-1, 1).to(device)
+#     x.requires_grad_(True)
+#     y = prob.u_exact(x, prob.param)
+#     res, u_pred = prob.residual(net, x, net.params_dict)
 
-    jac  = prob.compute_jacobian(net, x, net.params_dict)
+#     jac  = prob.compute_jacobian(net, x, net.params_dict)
 
 
-    # print 2 norm of res
-    print('res = ',torch.norm(res))
-    print('jac = ',torch.norm(jac)) 
+#     # print 2 norm of res
+#     print('res = ',torch.norm(res))
+#     print('jac = ',torch.norm(jac)) 
     
 
     

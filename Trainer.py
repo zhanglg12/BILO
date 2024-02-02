@@ -8,7 +8,7 @@ import torch
 import torch.optim as optim
 from lossCollection import lossCollection, EarlyStopping
 from Logger import Logger
-from util import get_mem_stats, set_device, set_seed, print_dict
+from util import get_mem_stats, set_device, set_seed, print_dict, flatten
 
 class Trainer:
     def __init__(self, opts, net, pde, lossCollection, logger:Logger):
@@ -34,9 +34,10 @@ class Trainer:
         if 'resgrad' in self.lossCollection.loss_active:
             self.loss_net.append('resgrad')
         
+        
         self.info['num_params'] = sum(p.numel() for p in self.net.parameters())
         self.info['num_train_params'] = sum(p.numel() for p in self.net.parameters() if p.requires_grad)
-        self.logger.log_params(self.info)
+        
 
     
 
@@ -114,12 +115,13 @@ class Trainer:
         except KeyboardInterrupt:
             print('KeyboardInterrupt')
         finally:
+            # log training info
             end = time.time()
             sec_per_step = (end - start) / self.estop.epoch
-            mem = get_mem_stats()
-            print('\n memory usage ')
-            self.logger.log_params(mem)
-            self.logger.log_params({'sec_per_step':sec_per_step})
+            mem =  get_mem_stats()
+            self.info.update({'sec_per_step':sec_per_step})
+            self.info.update(mem)
+            self.logger.log_params(flatten(self.info))
 
     def train_simu(self):
         '''

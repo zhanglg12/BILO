@@ -187,14 +187,14 @@ def get_mem_stats():
     ''' get cuda memory usage, return a dictionary of memory alloc, peak, reserved in MB'''
     mem = {}
     if torch.cuda.is_available():
-        mem['alloc'] = torch.cuda.memory_allocated() / 1024**2
-        mem['max_alloc'] = torch.cuda.max_memory_allocated() / 1024**2
-        mem['reserved'] = torch.cuda.memory_reserved() / 1024**2
-        mem['max_reserved'] = torch.cuda.max_memory_reserved() / 1024**2
+        mem['mem_alloc'] = torch.cuda.memory_allocated() / 1024**2
+        mem['mem_alloc_max'] = torch.cuda.max_memory_allocated() / 1024**2
+        mem['mem_reserved'] = torch.cuda.memory_reserved() / 1024**2
+        mem['mem_reserved_max'] = torch.cuda.max_memory_reserved() / 1024**2
     else:
-        mem['alloc'] = 0
-        mem['max_alloc'] = 0
-        mem['reserved'] = 0
-        mem['max_reserved'] = 0
+        mem['mem_alloc'] = 0
+        mem['mem_alloc_max'] = 0
+        mem['mem_reserved'] = 0
+        mem['mem_reserved_max'] = 0
 
     return mem

@@ -12,8 +12,6 @@ def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
     if problem_type == 'poisson':
         return PoissonProblem(**kwargs)
-    elif problem_type == 'poisson2':
-        return PoissonProblem2(**kwargs)
     elif problem_type == 'lorenz':
         return LorenzProblem(**kwargs)
     elif problem_type == 'simpleode':
