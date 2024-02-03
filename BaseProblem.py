@@ -18,7 +18,7 @@ class BaseProblem(ABC):
         self.output_dim = None
         self.output_transform = None
         self.param = {}
-        self.opts = {}
+        self.opts = {'init_param': None, 'trainable_param': []}
         self.tag = []
 
     @abstractmethod
@@ -44,18 +44,19 @@ class BaseProblem(ABC):
 
         self.prediction_variation(net)
 
-    def setup_network(self, nn_opts):
+    def setup_network(self, **kwargs):
         '''setup network, get network structure if restore'''
         # first copy self.pde.param, which include all pde-param in network
         # then update by init_param if provided
-        nn_opts['input_dim'] = self.input_dim
-        nn_opts['output_dim'] = self.output_dim
+        kwargs['input_dim'] = self.input_dim
+        kwargs['output_dim'] = self.output_dim
+
         pde_param = self.param.copy()
         init_param = self.opts['init_param']
         if init_param is not None:
             pde_param.update(init_param)
 
-        net = DensePoisson(**nn_opts,
+        net = DensePoisson(**kwargs,
                             output_transform=self.output_transform,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])

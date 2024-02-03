@@ -50,7 +50,7 @@ class DensePoisson(nn.Module):
 
         # for with_param version, pde parameter is not part of the network (but part of module)
         # for inverse problem, create embedding layer for pde parameter
-        if self.with_param == True:
+        if self.with_param:
             # Create embedding layers for each parameter
             self.param_embeddings = nn.ModuleDict({
                 name: nn.Linear(1, width, bias=True) for name, param in self.params_dict.items()
@@ -71,7 +71,7 @@ class DensePoisson(nn.Module):
         # trainable_param is a list of parameter names
         # only train part of the parameters
         self.trainable_param = trainable_param
-        if self.trainable_param:    
+        if self.trainable_param:
             for name, param in self.params_dict.items():
                 if name not in trainable_param:
                     param.requires_grad = False
