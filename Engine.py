@@ -58,10 +58,8 @@ class Engine:
             # going from adj-init to other 
             # same weight, different trainable parameter
             self.opts['weights'].update(restore_opts['weights'])
-
-            tmp = self.opts['nn_opts']['trainable_param']
             self.opts['nn_opts'].update(restore_opts['nn_opts'])
-            self.opts['nn_opts']['trainable_param'] = tmp
+
 
         else:
             raise ValueError('undefined restore type')
@@ -85,7 +83,7 @@ class Engine:
     
     def setup_network(self):
         '''setup network, get network structure if restore'''
-        self.net = self.pde.setup_network(nn_opts=self.opts['nn_opts'])
+        self.net = self.pde.setup_network(**self.opts['nn_opts'])
         self.net.to(self.device)
 
     def setup_trainer(self):

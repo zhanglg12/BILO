@@ -22,25 +22,25 @@ class BaseProblem(ABC):
         self.tag = []
 
     @abstractmethod
-    def residual(self, nn, x, param:dict):
+    def residual(self, nn, x):
         pass
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
-        res, pred = self.residual(net, self.dataset['x_res_train'], net.params_dict)
+        res, pred = self.residual(net, self.dataset['x_res_train'])
         return res, pred
 
     def get_data_loss(self, net):
         # get data loss
-        u_pred = net(self.dataset['x_dat_train'])
+        u_pred = net(self.dataset['x_dat_train'], net.params_dict)
         loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
         return loss
 
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
-            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'])
-            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'])
+            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'], net.params_dict)
+            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'], net.params_dict)
 
         self.prediction_variation(net)
 
@@ -86,7 +86,7 @@ class BaseProblem(ABC):
                 u_pred_var_dict[param_name][delta] = {}
                 with torch.no_grad():
                     net.params_dict[param_name].data = torch.tensor([[new_value]]).to(x_test.device)
-                    u_test = net(x_test)
+                    u_test = net(x_test, net.params_dict)
                     u_pred_var_dict[param_name][delta]['pred'] = u_test
 
                     if 'exact' in self.tag:

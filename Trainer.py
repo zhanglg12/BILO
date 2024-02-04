@@ -56,6 +56,17 @@ class Trainer:
         for param, grad in zip(params, grads):
             param.grad = grad
     
+    def set_pde_param_grad(self, loss):
+        '''
+        set gradient of loss w.r.t pde parameter
+        '''
+        params = self.net.param_pde
+        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=True)
+        for param, grad in zip(params, grads):
+            param.grad = grad
+
+
+    
     def config_train(self, traintype = 'basic'):
         self.traintype = traintype
         if traintype == 'basic' or traintype == 'fwd':
@@ -153,7 +164,8 @@ class Trainer:
                 break
             
             # take gradient of data loss w.r.t pde parameter
-            self.set_grad(self.net.param_pde, self.lossCollection.wloss_comp['data'])
+            # self.set_grad(self.net.param_pde, self.lossCollection.wloss_comp['data'])
+            self.set_pde_param_grad(self.lossCollection.wloss_comp['data'])
             
             # take gradient of residual loss w.r.t network parameter
             self.set_grad(self.net.param_net, loss_net)
@@ -207,6 +219,10 @@ class Trainer:
 
                 # take gradient of residual loss w.r.t network parameter
                 self.set_grad(self.net.param_net, loss_lower)
+                
+                # throw error here, implement later
+                raise NotImplementedError('not implemented yet')
+
                 self.optimizer['netparam'].step()
 
                 epoch_lower += 1

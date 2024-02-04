@@ -76,7 +76,6 @@ class GBMproblem():
         u_x = torch.zeros(n, self.xdim, device=X.device)
         u_xx = torch.zeros(n, self.xdim, device=X.device)
 
-        # import pdb; pdb.set_trace()
         for d in range(0, self.xdim):
             u_x[:,d:d+1] = torch.autograd.grad(u, vars[d+1], grad_outputs=v, create_graph=True)[0]
             u_xx[:,d:d+1] = torch.autograd.grad(u_x[:,d:d+1], vars[d+1], grad_outputs=v, create_graph=True)[0]

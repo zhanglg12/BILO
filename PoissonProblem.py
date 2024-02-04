@@ -28,16 +28,17 @@ class PoissonProblem(BaseProblem):
         self.output_transform = lambda x, u: u * x * (1 - x)
 
 
-    def residual(self, nn, x, param:dict):
+    def residual(self, nn, x):
         def f(x):
             return -(torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
         x.requires_grad_(True)
-        u_pred = nn(x)
+        
+        u_pred = nn(x, nn.params_dict)
         u_x = torch.autograd.grad(u_pred, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = param['D'] * u_xx - f(x)
+        res = nn.params_expand['D'] * u_xx - f(x)
 
         return res, u_pred
 

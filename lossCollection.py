@@ -157,9 +157,14 @@ class lossCollection:
         resgradmse = 0.0        
         for pname in self.net.trainable_param:
             for j in range(self.pde.output_dim):
-                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], grad_outputs=self.idmx,
-                create_graph=True, is_grads_batched=True, retain_graph=True)[0]
+                tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_expand[pname], grad_outputs=torch.ones_like(self.res_unbind[j]),
+                create_graph=True, retain_graph=True,allow_unused=True)[0]
+
+                # for debugging, should be same as tmp
+                # tmp2 = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], grad_outputs=self.idmx,
+                # create_graph=True, retain_graph=True,allow_unused=True,  is_grads_batched=True)[0]
                 resgradmse += torch.sum(torch.pow(tmp, 2))
+        
         return resgradmse/n
 
     # to prevent derivative of u w.r.t. parameter to be 0

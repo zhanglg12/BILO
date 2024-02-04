@@ -5,12 +5,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 from util import generate_grf
+from BaseProblem import BaseProblem
     
-class FKproblem():
+class FKproblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
         self.input_dim = 2 # x, t
         self.output_dim = 1
+        self.opts=kwargs
 
         self.dataset = DataSet(kwargs['datafile'])
         # get parameter from mat file
@@ -36,7 +38,7 @@ class FKproblem():
 
 
 
-    def residual(self, nn, X, param: dict):
+    def residual(self, nn, X):
 
         t = X[:, 0:1]
         x = X[:, 1:2]
@@ -45,7 +47,7 @@ class FKproblem():
         nn_input = torch.cat((t,x), dim=1)
 
         # Forward pass through the network
-        u_pred = nn(nn_input)
+        u_pred = nn(nn_input, nn.params_dict)
 
         # Define a tensor of ones for grad_outputs
         v = torch.ones_like(u_pred)
@@ -57,7 +59,7 @@ class FKproblem():
 
         
         # Compute the right-hand side of the PDE
-        rhs = param['rD'] * self.D * u_xx + param['rRHO'] * self.RHO * u_pred * (1 - u_pred)
+        rhs = nn.params_expand['rD'] * self.D * u_xx + nn.params_expand['rRHO'] * self.RHO * u_pred * (1 - u_pred)
         
         # Compute the residual
         res = u_t - rhs
@@ -66,16 +68,16 @@ class FKproblem():
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
-        res, pred = self.residual(net, self.dataset['X_res_train'], net.params_dict)
+        res, pred = self.residual(net, self.dataset['X_res_train'])
         return res, pred
     
     def get_data_loss(self, net):
         # get data loss
         if self.use_res:
-            u_pred = net(self.dataset['X_res_train'])
+            u_pred = net(self.dataset['X_res_train'],net.params_dict)
             loss = torch.mean(torch.square(u_pred - self.dataset['u_res_train']))
         else:
-            u_pred = net(self.dataset['X_dat_train'])
+            u_pred = net(self.dataset['X_dat_train'],net.params_dict)
             loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
         
         return loss
@@ -96,10 +98,10 @@ class FKproblem():
         x_res_train = self.dataset['X_res_train']
         
         with torch.no_grad():
-            self.dataset['upred_dat'] = net(x_dat)
-            self.dataset['upred_res'] = net(x_res)
-            self.dataset['upred_dat_train'] = net(x_dat_train)
-            self.dataset['upred_res_train'] = net(x_res_train)
+            self.dataset['upred_dat'] = net(x_dat, net.params_dict)
+            self.dataset['upred_res'] = net(x_res, net.params_dict)
+            self.dataset['upred_dat_train'] = net(x_dat_train, net.params_dict)
+            self.dataset['upred_res_train'] = net(x_res_train, net.params_dict)
 
 
     def plot_scatter_pred(self, savedir=None):

@@ -33,6 +33,7 @@ class DensePoisson(nn.Module):
         # need ParameterDict to make it registered, otherwise to(device) will not automatically move it to device
         tmp = {k: nn.Parameter(torch.tensor([[v]])) for k, v in params_dict.items()}
         self.params_dict = nn.ParameterDict(tmp)
+        self.params_expand = {}
 
 
         if self.fourier:
@@ -102,7 +103,7 @@ class DensePoisson(nn.Module):
                                              np.sqrt(6 / layer.in_features) / self.omega_0)
         
 
-    def embedding(self, x):
+    def embedding(self, x, params_dict=None):
         '''
         No fourier feature embedding:
             then y = x
@@ -121,15 +122,19 @@ class DensePoisson(nn.Module):
             x = self.input_layer(x)
 
         if self.with_param:
-            for name, param in self.params_dict.items():
-                param_embedding = self.param_embeddings[name](param)
+            for name, param in params_dict.items():
+                # expand the parameter to the same size as x
+                self.params_expand[name] = param.expand(x.shape[0], -1)
+                v = self.params_expand[name] # (batch, 1)
+                param_embedding = self.param_embeddings[name](v)
                 x += param_embedding
+
 
         return x
         
-    def forward(self, x):
+    def forward(self, x, params_dict=None):
         
-        X = self.embedding(x)
+        X = self.embedding(x, params_dict)
         Xtmp = self.act(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
