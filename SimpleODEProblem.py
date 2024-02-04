@@ -40,6 +40,7 @@ class SimpleODEProblem(BaseProblem):
         super().__init__()
         self.input_dim = 1
         self.output_dim = 2
+        self.opts = kwargs
 
         self.dataset = DataSet(kwargs['datafile'])
         # get parameter from mat file
@@ -62,10 +63,10 @@ class SimpleODEProblem(BaseProblem):
         self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
 
 
-    def residual(self, nn, x, param:dict):
+    def residual(self, nn, x):
         x.requires_grad_(True)
         
-        u_pred = nn(x)  # Assuming x.shape is (batch, 1)
+        u_pred = nn(x, nn.params_dict)  # Assuming x.shape is (batch, 1)
         # Initialize tensors
         u_t = torch.zeros_like(u_pred)
         res = torch.zeros_like(u_pred)
@@ -75,10 +76,10 @@ class SimpleODEProblem(BaseProblem):
             grad_outputs = torch.ones_like(u_pred[:, i])
             u_t_i = torch.autograd.grad(u_pred[:, i], x, grad_outputs=grad_outputs, create_graph=True, retain_graph=True)[0]
             u_t[:, i] = u_t_i[:, 0]  # Adjust dimensions
-
+        
         # Perform your operations
-        res[:, 0] = u_t[:, 0] - (param['a11'] * torch.pow(u_pred[:, 0],self.p) + param['a12'] * torch.pow(u_pred[:, 1],self.p))
-        res[:, 1] = u_t[:, 1] - (param['a21'] * torch.pow(u_pred[:, 0],self.p) + param['a22'] * torch.pow(u_pred[:, 1],self.p))
+        res[:, 0:1] = u_t[:, 0:1] - (nn.params_expand['a11'] * torch.pow(u_pred[:, 0:1],self.p) + nn.params_expand['a12'] * torch.pow(u_pred[:, 1:2],self.p))
+        res[:, 1:2] = u_t[:, 1:2] - (nn.params_expand['a21'] * torch.pow(u_pred[:, 0:1],self.p) + nn.params_expand['a22'] * torch.pow(u_pred[:, 1:2],self.p))
         
         return res, u_pred
 

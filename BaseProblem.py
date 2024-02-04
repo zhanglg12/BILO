@@ -18,7 +18,7 @@ class BaseProblem(ABC):
         self.output_dim = None
         self.output_transform = None
         self.param = {}
-        self.opts = {'init_param': None, 'trainable_param': []}
+        self.opts = {}
         self.tag = []
 
     @abstractmethod

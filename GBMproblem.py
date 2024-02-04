@@ -7,6 +7,7 @@ from DataSet import DataSet
 from matplotlib import pyplot as plt
 import os
 from DensePoisson import DensePoisson
+from BaseProblem import BaseProblem
 
 def sumcol(A):
     # sum along column
@@ -14,7 +15,7 @@ def sumcol(A):
 
 
 
-class GBMproblem():
+class GBMproblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
         
@@ -22,6 +23,7 @@ class GBMproblem():
         # get parameter from mat file
         # check empty string
         self.param = {}
+        self.opts = kwargs
         
         self.xdim = int(self.dataset['xdim'])
         self.dim = self.xdim + 1 # add time dimension
@@ -52,7 +54,7 @@ class GBMproblem():
         r2 = sumcol(torch.square((X[:, 1:self.dim] - x0)*L)) # this is in pixel scale, unit mm, 
         return 0.1*torch.exp(-0.1*r2)
 
-    def residual(self, nn, X, phi, P, gradPphi, param: dict):
+    def residual(self, nn, X, phi, P, gradPphi):
         
         # Get the number of dimensions
         n = X.shape[0]
@@ -65,7 +67,7 @@ class GBMproblem():
         nn_input = torch.cat(vars, dim=1)
        
         # Forward pass through the network
-        u = nn(nn_input)
+        u = nn(nn_input, nn.params_dict)
         # Define a tensor of ones for grad_outputs
         v = torch.ones_like(u)
         
@@ -80,24 +82,24 @@ class GBMproblem():
             u_x[:,d:d+1] = torch.autograd.grad(u, vars[d+1], grad_outputs=v, create_graph=True)[0]
             u_xx[:,d:d+1] = torch.autograd.grad(u_x[:,d:d+1], vars[d+1], grad_outputs=v, create_graph=True)[0]
         
-        prof = param['rRHO'] * self.dataset['RHO'] * phi * u * ( 1 - u)
-        diff = param['rD'] * self.dataset['DW'] * (P * phi * sumcol(u_xx) + self.dataset['L'] * sumcol(gradPphi * u_x))
+        prof = nn.params_expand['rRHO'] * self.RHO * phi * u * ( 1 - u)
+        diff = nn.params_expand['rD'] * self.DW * (P * phi * sumcol(u_xx) + self.L * sumcol(gradPphi * u_x))
         res = phi * u_t - (prof + diff)
         return res, u
     
     
     def get_res_pred(self, net):
         # get residual and prediction
-        res, u_pred = self.residual(net, self.dataset['X_res_train'], self.dataset['phi_res_train'], self.dataset['P_res_train'], self.dataset['gradPphi_res_train'], net.params_dict)
+        res, u_pred = self.residual(net, self.dataset['X_res_train'], self.dataset['phi_res_train'], self.dataset['P_res_train'], self.dataset['gradPphi_res_train'])
         return res, u_pred
 
     def get_data_loss(self, net):
         # get data loss
         if self.use_res:
-            u_pred = net(self.dataset['X_res_train'])
+            u_pred = net(self.dataset['X_res_train'], net.params_dict)
             loss = torch.mean(torch.square((u_pred - self.dataset['ugt_res_train'])*self.dataset['phi_res_train']))
         else:
-            u_pred = net(self.dataset['X_dat_train'])
+            u_pred = net(self.dataset['X_dat_train'], net.params_dict)
             loss = torch.mean(torch.square((u_pred - self.dataset['ugt_dat_train'])*self.dataset['phi_dat_train']))
         
         return loss
@@ -114,10 +116,10 @@ class GBMproblem():
         x_res_train = self.dataset['X_res_train']
         
         with torch.no_grad():
-            self.dataset['upred_dat'] = net(x_dat)
-            self.dataset['upred_res'] = net(x_res)
-            self.dataset['upred_dat_train'] = net(x_dat_train)
-            self.dataset['upred_res_train'] = net(x_res_train)
+            self.dataset['upred_dat'] = net(x_dat, net.params_dict)
+            self.dataset['upred_res'] = net(x_res, net.params_dict)
+            self.dataset['upred_dat_train'] = net(x_dat_train, net.params_dict)
+            self.dataset['upred_res_train'] = net(x_res_train, net.params_dict)
 
             
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
