@@ -24,21 +24,28 @@ class GBMproblem(BaseProblem):
         # check empty string
         self.param = {}
         self.opts = kwargs
+
+        # GBM specific options
+        self.whichdata = kwargs['whichdata']
+
         
         self.xdim = int(self.dataset['xdim'])
         self.dim = self.xdim + 1 # add time dimension
         self.input_dim = self.dim
         self.output_dim = 1
 
-        self.param['rD'] = self.dataset['rDe']
-        self.param['rRHO'] = self.dataset['rRHOe']
+
+        
+        # inititalize parameters 
+        self.param['rD'] = 1.0
+        self.param['rRHO'] = 1.0
         
         self.DW = self.dataset['DW']
         self.RHO = self.dataset['RHO']
         
         self.x0 = self.dataset['x0char']
         self.L = self.dataset['L']
-        self.use_res = kwargs['use_res']
+
 
 
         self.output_transform = torch.nn.Module()
@@ -95,13 +102,8 @@ class GBMproblem(BaseProblem):
 
     def get_data_loss(self, net):
         # get data loss
-        if self.use_res:
-            u_pred = net(self.dataset['X_res_train'], net.params_dict)
-            loss = torch.mean(torch.square((u_pred - self.dataset['ugt_res_train'])*self.dataset['phi_res_train']))
-        else:
-            u_pred = net(self.dataset['X_dat_train'], net.params_dict)
-            loss = torch.mean(torch.square((u_pred - self.dataset['ugt_dat_train'])*self.dataset['phi_dat_train']))
-        
+        u_pred = net(self.dataset['X_dat_train'], net.params_dict)
+        loss = torch.mean(torch.square((u_pred - self.dataset['u_dat_train'])*self.dataset['phi_dat_train']))
         return loss
     
     def print_info(self):
@@ -164,6 +166,24 @@ class GBMproblem(BaseProblem):
         self.dataset.subsample_firstn_astrain(nres_train, vars)
         print('downsample ', vars, ' to ', nres_train)
 
+
+        # which data is (uchar|ugt)_(res|dat)
+        key = self.whichdata + '_train'
+        self.dataset['u_dat_train'] = self.dataset[key]
+        
+        # where to evaluated the data loss, _res or _dat
+        if 'res' in self.whichdata:
+            self.dataset['X_dat_train'] = self.dataset['X_res_train']
+            self.dataset['phi_dat_train'] = self.dataset['phi_res_train']
+            print('use res data for data loss, change X_dat_train and phi_dat_train')
+        
+        
+        
+            
+        
+
+
+        
         
         
 
@@ -177,26 +197,19 @@ if __name__ == "__main__":
     optobj = Options()
     optobj.parse_args(*sys.argv[1:])
     
-
     device = set_device('cuda')
     set_seed(0)
     
-    prob = GBMproblem(datafile=optobj.opts['pde_opts']['datafile'])
+    prob = GBMproblem(**optobj.opts['pde_opts'])
     prob.print_info()
+    prob.setup_dataset(optobj.opts['dataset_opts'])
 
-    optobj.opts['nn_opts']['input_dim'] = prob.input_dim
-    optobj.opts['nn_opts']['output_dim'] = prob.output_dim
+    net = prob.setup_network(**optobj.opts['nn_opts'])
 
-    net = DensePoisson(**optobj.opts['nn_opts'],
-                output_transform=prob.output_transform,
-                params_dict=prob.param).to(device)
-
-    ds = prob.dataset
-    ds.to_device(device)
-    res, u_pred = prob.residual(net, ds['X_res'], ds['phi_res'], ds['P_res'], ds['gradPphi_res'], net.params_dict)
+    res, u_pred = prob.residual(net, prob.dataset['X_res'], prob.dataset['phi_res'], prob.dataset['P_res'], prob.dataset['gradPphi_res'])
 
     prob.make_prediction(net)
-    prob.visualize( net, savedir=optobj.opts['logger_opts']['save_dir'])
+    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
     
 
     # print 2 norm of res

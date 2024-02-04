@@ -24,11 +24,13 @@ default_opts = {
     },
     'pde_opts': {
         'problem': 'simpleode',
-        'use_res': False, # for GBM problem, use (X_res u_res), i.e., full time range, for data loss
         'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
         'trainable_param': '', # list of trainable parameters, e.g. 'D,rho'
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
+    },
+    'gbm_opts': {
+        'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
     },
     'nn_opts': {
         'depth': 4,
@@ -277,6 +279,11 @@ class Options:
             # inverse problem, use exact D to gen data
             if self.opts['traintype'] == 'adj-simu':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
+        
+        if self.opts['pde_opts']['problem'] == 'gbm':
+            # merge gbm_opts to pde_opts
+            self.opts['pde_opts'].update(self.opts['gbm_opts'])
+            del self.opts['gbm_opts']
         
     
         
