@@ -71,14 +71,18 @@ class DensePoisson(nn.Module):
 
         # trainable_param is a list of parameter names
         # only train part of the parameters
-        self.trainable_param = trainable_param
-        if self.trainable_param:
-            for name, param in self.params_dict.items():
-                if name not in trainable_param:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
 
+        # For now, set all PDE parameters to be trainable, for initialization, set lr=0
+        # self.trainable_param = list(self.params_dict.keys())
+
+        self.trainable_param = trainable_param
+        for name, param in self.params_dict.items():
+            if name not in self.trainable_param:
+                param.requires_grad = False
+            else:
+                param.requires_grad = True
+
+        
        
         # separate parameters for the neural net and the PDE parameters
         # neural net parameter exclude parameter embedding and fourier feature embedding layer
@@ -86,7 +90,7 @@ class DensePoisson(nn.Module):
                             [param for layer in self.hidden_layers for param in layer.parameters()] +\
                             list(self.output_layer.parameters())
 
-        self.param_pde = [self.params_dict[name] for name in self.trainable_param]
+        self.param_pde = list(self.params_dict.values())
 
         self.param_all = self.param_net + self.param_pde
 
@@ -121,14 +125,16 @@ class DensePoisson(nn.Module):
         else:
             x = self.input_layer(x)
 
-        if self.with_param:
-            for name, param in params_dict.items():
+        
+        for name, param in params_dict.items():
+            if self.with_param:
                 # expand the parameter to the same size as x
                 self.params_expand[name] = param.expand(x.shape[0], -1)
                 v = self.params_expand[name] # (batch, 1)
                 param_embedding = self.param_embeddings[name](v)
                 x += param_embedding
-
+            else:
+                self.params_expand[name] = params_dict[name]
 
         return x
         

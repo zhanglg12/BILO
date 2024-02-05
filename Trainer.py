@@ -69,11 +69,11 @@ class Trainer:
     
     def config_train(self, traintype = 'basic'):
         self.traintype = traintype
-        if traintype == 'basic' or traintype == 'fwd':
-            param_to_train = self.net.param_all
-            self.optimizer['allparam'] = optim.Adam(param_to_train, lr=self.opts['lr'])
+
+        if traintype == 'fwd' or traintype == 'basic':
+            self.optimizer['allparam'] = optim.Adam(self.net.param_all)
             self.ftrain = self.train_vanilla
-        
+
         elif traintype == 'adj-init':
             # single optimizer for all parameters
             # learning rate for pde parameter is 0
@@ -396,9 +396,9 @@ class Trainer:
         if not os.path.exists(fpath):
             print(f'optimizer file {fpath} not found, use default optimizer')
             return
-            
-        optimizer.load_state_dict(torch.load(fpath))
+        
         print(f'restore optimizer from {fpath}')
+        optimizer.load_state_dict(torch.load(fpath))
         
         for state in optimizer.state.values():
             for k, v in state.items():

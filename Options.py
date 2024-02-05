@@ -28,6 +28,7 @@ default_opts = {
         'trainable_param': '', # list of trainable parameters, e.g. 'D,rho'
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
+        'use_res': False, # only used in fkproblem, use res as training data
     },
     'gbm_opts': {
         'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
@@ -241,21 +242,27 @@ class Options:
             self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
 
         # training type
+        # for vanilla PINN, nn does not include parameter
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = None
-            # for vanilla PINN, nn does not include parameter
-            # self.opts['nn_opts']['with_param'] = False
+            self.opts['weights']['fullresgrad'] = None
+            
+            self.opts['nn_opts']['with_param'] = False
+            assert self.opts['pde_opts']['trainable_param'] != '', 'trainable_param should not be empty for basic training'
         
         if self.opts['traintype'] == 'fwd':
             # for fwd problem, nn does not include parameter, no training on parameter
-            # self.opts['nn_opts']['with_param'] = False
+            self.opts['nn_opts']['with_param'] = False
+            self.opts['weights']['resgrad'] = None
+            self.opts['weights']['fullresgrad'] = None
             self.opts['pde_opts']['trainable_param'] = ''
-            self.opts['weights']['data'] = None
+            
         
         if self.opts['traintype'].startswith('adj'):
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
         
+        # After traintype is processed 
         # convert trainable param to list of string, split by ','
         if self.opts['pde_opts']['trainable_param'] != '':
             self.opts['pde_opts']['trainable_param'] = self.opts['pde_opts']['trainable_param'].split(',')

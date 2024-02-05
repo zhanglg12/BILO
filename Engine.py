@@ -47,22 +47,12 @@ class Engine:
     def restore_opts(self, restore_opts):
         ''' restore options from a previous run, and update with new options
         '''
-        # only restore options of 
-        if self.opts['traintype'] == restore_opts['traintype']:
-            tmp = self.opts['train_opts'].copy()
-
-            self.opts['nn_opts'].update(restore_opts['nn_opts'])
-            return
-
-        elif self.opts['traintype'] != 'adj-init' and restore_opts['traintype'] == 'adj-init':
+        self.opts['nn_opts'].update(restore_opts['nn_opts'])
+        
+        if self.opts['traintype'] != 'adj-init' and restore_opts['traintype'] == 'adj-init':
             # going from adj-init to other 
             # same weight, different trainable parameter
             self.opts['weights'].update(restore_opts['weights'])
-            self.opts['nn_opts'].update(restore_opts['nn_opts'])
-
-
-        else:
-            raise ValueError('undefined restore type')
 
     def restore_run(self):
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters
@@ -72,7 +62,9 @@ class Engine:
                 opts_path = os.path.join(self.opts['restore'], 'options.json')
                 restore_opts = read_json(opts_path)
                 self.restore_artifacts = {fname: os.path.join(self.opts['restore'], fname) for fname in os.listdir(self.opts['restore']) if fname.endswith('.pth')}
-                print('restore from directory')
+                path = self.opts['restore']
+                self.restore_artifacts['artifacts_dir'] = path
+                print(f'restore from directory {path}')
 
             else:
                 #  restore from exp_name:run_name
