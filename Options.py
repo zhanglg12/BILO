@@ -63,9 +63,11 @@ default_opts = {
         'lr_net': 1e-3,
         'lr_pde': 1e-3,
         # for bi-level training
-        'tol_lower': 1e-2, # lower level tol
+        'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':100,
         'net_data':False, # use data loss for network weights
+        'loss_net':'res,fullresgrad', # loss for network weights
+        'loss_pde':'data', # loss for pde parameter
     },
     'noise_opts':{
         'use_noise': False,
@@ -74,8 +76,8 @@ default_opts = {
     },
     'weights': {
         'res': 1.0,
-        'resgrad': 0.001,
-        'fullresgrad': None,
+        'resgrad': None,
+        'fullresgrad': 0.001,
         'data': 1.0,
         'paramgrad': None,
     },
@@ -261,7 +263,19 @@ class Options:
         if self.opts['traintype'].startswith('adj'):
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
-        
+
+            if self.opts['traintype'] != 'adj-init':
+                # set use_dat to False
+                self.opts['train_opts']['net_data'] = False
+
+        # convert to list of losses
+        self.opts['train_opts']['loss_net'] = self.opts['train_opts']['loss_net'].split(',')
+        self.opts['train_opts']['loss_pde'] = self.opts['train_opts']['loss_pde'].split(',')
+        # remove inative losses (weight is None)
+        self.opts['train_opts']['loss_net'] = [loss for loss in self.opts['train_opts']['loss_net'] if self.opts['weights'][loss] is not None]
+        self.opts['train_opts']['loss_pde'] = [loss for loss in self.opts['train_opts']['loss_pde'] if self.opts['weights'][loss] is not None]
+
+
         # After traintype is processed 
         # convert trainable param to list of string, split by ','
         if self.opts['pde_opts']['trainable_param'] != '':
@@ -291,6 +305,7 @@ class Options:
             # merge gbm_opts to pde_opts
             self.opts['pde_opts'].update(self.opts['gbm_opts'])
             del self.opts['gbm_opts']
+
         
     
         

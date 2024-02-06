@@ -192,6 +192,10 @@ class lossCollection:
         self.wloss_comp = losses
         self.wtotal = weighted_sum
         self.wloss_comp['total'] = self.wtotal
+    
+    def get_wloss_sum(self, list_of_loss):
+        # return the sum of weighted loss
+        return sum([self.wloss_comp[key] for key in list_of_loss])
 
 
 class EarlyStopping:

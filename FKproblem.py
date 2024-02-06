@@ -102,12 +102,6 @@ class FKproblem(BaseProblem):
             self.dataset['upred_res'] = net(x_res, net.params_dict)
             self.dataset['upred_dat_train'] = net(x_dat_train, net.params_dict)
             self.dataset['upred_res_train'] = net(x_res_train, net.params_dict)
-
-
-    def plot_scatter_pred(self, savedir=None):
-        self.dataset.to_np()        
-        ax, fig = self.plot_scatter(self.dataset['X_dat'], self.dataset['upred_dat'], fname = 'fig_upred_dat.png', savedir=savedir)
-        ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
         
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
         ''' plot u vs x, color is t'''
@@ -134,6 +128,8 @@ class FKproblem(BaseProblem):
         ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['upred_dat_train'], fname = 'fig_upred_dat_train.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_res_train'], self.dataset['upred_res_train'], fname = 'fig_upred_res_train.png', savedir=savedir)
+
+        ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['u_dat_train'], fname = 'fig_u_dat_train.png', savedir=savedir)
 
     def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''
