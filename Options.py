@@ -46,6 +46,7 @@ default_opts = {
     
     'dataset_opts': {
         'N_res_train': 100,
+        'N_bc_train':100,
         'N_res_test': 100,
         'N_dat_train': 100,
         'N_dat_test': 100,
@@ -66,7 +67,7 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':100,
         'net_data':False, # use data loss for network weights
-        'loss_net':'res,fullresgrad', # loss for network weights
+        'loss_net':'res,fullresgrad,bc', # loss for network weights
         'loss_pde':'data', # loss for pde parameter
     },
     'noise_opts':{
@@ -80,6 +81,7 @@ default_opts = {
         'fullresgrad': 0.001,
         'data': 1.0,
         'paramgrad': None,
+        'bc':None,
     },
     'loss_opts': {
         'msample':100, #number of samples for resgrad

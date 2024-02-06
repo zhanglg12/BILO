@@ -106,6 +106,12 @@ class GBMproblem(BaseProblem):
         loss = torch.mean(torch.square((u_pred - self.dataset['u_dat_train'])*self.dataset['phi_dat_train']))
         return loss
     
+    def get_bc_loss(self, net):
+        # get dirichlet boundary condition loss
+        u_pred = net(self.dataset['X_bc_train'], net.params_dict)
+        loss = torch.mean(torch.square((u_pred - self.dataset['zero_bc_train'])))
+        return loss
+    
     def print_info(self):
         pass
     
@@ -165,6 +171,12 @@ class GBMproblem(BaseProblem):
         vars = self.dataset.filter('_res')
         self.dataset.subsample_firstn_astrain(nres_train, vars)
         print('downsample ', vars, ' to ', nres_train)
+
+        # bc loss
+        n = min(ds_opts['N_bc_train'], self.dataset['X_bc'].shape[0])
+        vars = self.dataset.filter('_bc')
+        self.dataset.subsample_firstn_astrain(n, vars)
+        print('downsample ', vars, ' to ', n)
 
 
         # which data is (uchar|ugt)_(res|dat)

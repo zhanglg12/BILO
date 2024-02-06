@@ -29,7 +29,8 @@ class lossCollection:
 
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 
-        'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss}
+        'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
+        'bc': self.bcloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -177,9 +178,11 @@ class lossCollection:
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
-        # self.u_pred = self.net(self.dataset['x_dat_train'])
-        # return mse(self.u_pred, self.dataset['u_dat_train'])
         return self.pde.get_data_loss(self.net)
+    
+    def bcloss(self):
+        # compute loss from boundary condition
+        return self.pde.get_bc_loss(self.net)
     
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight

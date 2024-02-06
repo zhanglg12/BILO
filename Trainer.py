@@ -118,14 +118,14 @@ class Trainer:
             self.ftrain()
         except KeyboardInterrupt:
             print('KeyboardInterrupt')
-        finally:
-            # log training info
-            end = time.time()
-            sec_per_step = (end - start) / self.estop.epoch
-            mem =  get_mem_stats()
-            self.info.update({'sec_per_step':sec_per_step})
-            self.info.update(mem)
-            self.logger.log_params(flatten(self.info))
+        
+        # log training info
+        end = time.time()
+        sec_per_step = (end - start) / self.estop.epoch
+        mem =  get_mem_stats()
+        self.info.update({'sec_per_step':sec_per_step})
+        self.info.update(mem)
+        self.logger.log_params(flatten(self.info))
 
     def train_simu(self):
         '''
