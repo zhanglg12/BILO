@@ -91,8 +91,13 @@ class DensePoisson(nn.Module):
                             list(self.output_layer.parameters())
 
         self.param_pde = list(self.params_dict.values())
-
+        
+        # if optimizer include all parameters
         self.param_all = self.param_net + self.param_pde
+
+        # collection of trainable parameters
+        self.param_pde_trainable = [param for param in self.param_pde if param.requires_grad]
+
 
     
     def siren_init(self):

@@ -65,7 +65,7 @@ default_opts = {
         'lr_pde': 1e-3,
         # for bi-level training
         'tol_lower': 1e-3, # lower level tol
-        'max_iter_lower':100,
+        'max_iter_lower':1000,
         'net_data':False, # use data loss for network weights
         'loss_net':'res,fullresgrad,bc', # loss for network weights
         'loss_pde':'data', # loss for pde parameter

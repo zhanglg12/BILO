@@ -43,7 +43,7 @@ class Trainer:
         '''
         set gradient of loss w.r.t params
         '''
-        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=True)
+        grads = torch.autograd.grad(loss, params, allow_unused=True)
         for param, grad in zip(params, grads):
             param.grad = grad
     
@@ -51,8 +51,8 @@ class Trainer:
         '''
         set gradient of loss w.r.t pde parameter
         '''
-        params = self.net.param_pde
-        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=True)
+        params = self.net.param_pde_trainable
+        grads = torch.autograd.grad(loss, params, allow_unused=True)
         for param, grad in zip(params, grads):
             param.grad = grad
 
@@ -72,7 +72,7 @@ class Trainer:
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde, 'lr': 0.0}
             ]
-            self.optimizer['allparam'] = optim.Adam(optim_param_group)
+            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
             self.ftrain = self.train_simu
             
 
@@ -116,8 +116,9 @@ class Trainer:
         start = time.time()
         try:
             self.ftrain()
-        except KeyboardInterrupt:
-            print('KeyboardInterrupt')
+        except Exception as e:
+            print(f'error: {e}')
+            self.info.update({'error':str(e)})
         
         # log training info
         end = time.time()
@@ -125,6 +126,7 @@ class Trainer:
         mem =  get_mem_stats()
         self.info.update({'sec_per_step':sec_per_step})
         self.info.update(mem)
+        
         self.logger.log_params(flatten(self.info))
 
     def train_simu(self):
@@ -333,7 +335,7 @@ class Trainer:
                 log_stat(wloss_comp, 0, epoch)
 
             # take gradient of data loss w.r.t pde parameter
-            self.set_grad(self.net.param_pde, loss_upper)
+            self.set_pde_param_grad(self.lossCollection.wloss_comp['data'])
             
             # take gradient of residual loss w.r.t network parameter
             loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
