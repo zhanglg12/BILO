@@ -64,7 +64,7 @@ class DenseNet(nn.Module):
 
         # for now, just one function
         if self.with_func:
-            self.func_param = create_param_function(input_dim=1, output_dim=1, depth=4, width=16)
+            self.func_param = create_param_function(input_dim=1, output_dim=1, depth=4, width=32)
             
 
         # activation function
@@ -254,11 +254,14 @@ def create_param_function(input_dim=1, output_dim=1, depth=4, width=16):
     layers = []
     # input layer
     layers.append(nn.Linear(input_dim, width))
+    layers.append(nn.Tanh())
     # hidden layers
     for _ in range(depth - 2):
         layers.append(nn.Linear(width, width))
+        layers.append(nn.Tanh())
     # output layer
     layers.append(nn.Linear(width, output_dim))
+    layers.append(nn.Softplus())
     return nn.Sequential(*layers)
 
 # simple test of the network
