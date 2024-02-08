@@ -12,7 +12,7 @@ from Options import *
 from util import *
 
 
-from DensePoisson import load_artifact
+from DenseNet import load_artifact
 from Problems import create_pde_problem
 from lossCollection import lossCollection
 

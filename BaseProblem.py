@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from util import generate_grf, to_double, add_noise
 from DataSet import DataSet
-from DensePoisson import DensePoisson
+from DenseNet import DenseNet
 
 class BaseProblem(ABC):
     def __init__(self, **kwargs):
@@ -56,7 +56,7 @@ class BaseProblem(ABC):
         if init_param is not None:
             pde_param.update(init_param)
 
-        net = DensePoisson(**kwargs,
+        net = DenseNet(**kwargs,
                             output_transform=self.output_transform,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])

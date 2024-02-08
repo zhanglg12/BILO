@@ -90,7 +90,7 @@ if __name__ == "__main__":
     
     from Options import Options
     from util import set_device, set_seed, get_mem_stats
-    from DensePoisson import DensePoisson
+    from DenseNet import DenseNet
     import sys
 
     optobj = Options()

@@ -2,7 +2,7 @@
 
 from util import *
 
-from DensePoisson import *
+from DenseNet import *
 from MlflowHelper import *
 from DataSet import DataSet
 

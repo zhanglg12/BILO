@@ -6,7 +6,7 @@ import torch
 from DataSet import DataSet
 from matplotlib import pyplot as plt
 import os
-from DensePoisson import DensePoisson
+from DenseNet import DenseNet
 from BaseProblem import BaseProblem
 
 def sumcol(A):

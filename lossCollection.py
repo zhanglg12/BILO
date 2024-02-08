@@ -246,7 +246,7 @@ if __name__ == "__main__":
 
     import sys
     from Options import *
-    from DensePoisson import *
+    from DenseNet import *
     from Problems import *
 
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     optobj.opts['nn_opts']['input_dim'] = prob.input_dim
     optobj.opts['nn_opts']['output_dim'] = prob.output_dim
 
-    net = DensePoisson(**optobj.opts['nn_opts'],
+    net = DenseNet(**optobj.opts['nn_opts'],
                 output_transform=prob.output_transform, 
                 params_dict=prob.init_param).to(device)
 

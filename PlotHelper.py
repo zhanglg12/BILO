@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from config import *
 from util import *
 
-from DensePoisson import *
+from DenseNet import *
 from MlflowHelper import MlflowHelper
 from DataSet import DataSet
 from Problems import *
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     pde = create_pde_problem(**opts['pde_opts'])
     
     # load net
-    nn = DensePoisson(**opts['nn_opts'])
+    nn = DenseNet(**opts['nn_opts'])
     nn.load_state_dict(torch.load(atf_dict['net.pth']))
 
     # load dataset

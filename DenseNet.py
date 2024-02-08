@@ -11,7 +11,7 @@ from MlflowHelper import MlflowHelper
 from Options import *
 # the pde and the neural net is combined in one class
 # the PDE parameter is also part of the network
-class DensePoisson(nn.Module):
+class DenseNet(nn.Module):
     def __init__(self, depth, width, input_dim=1, output_dim=1, 
                 output_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
@@ -214,7 +214,7 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
     opts, artifact_paths = load_artifact(exp_name, run_name, run_id, name_str)
     
     # reconstruct net from options and load weight
-    net = DensePoisson(**(opts['nn_opts']))
+    net = DenseNet(**(opts['nn_opts']))
     net.load_state_dict(torch.load(artifact_paths['net.pth']))
     print(f'net loaded from {artifact_paths["net.pth"]}')
     return net, opts
@@ -238,7 +238,7 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 #     optobj.opts['nn_opts']['input_dim'] = prob.input_dim
 #     optobj.opts['nn_opts']['output_dim'] = prob.output_dim
 
-#     net = DensePoisson(**optobj.opts['nn_opts'],
+#     net = DenseNet(**optobj.opts['nn_opts'],
 #                 output_transform=prob.output_transform, 
 #                 params_dict=prob.param).to(device)
     

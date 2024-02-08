@@ -475,7 +475,7 @@ class Trainer:
 #     dataset = create_dataset_from_pde(pde, optobj.opts['dataset_opts'])
 
 #     # setup network
-#     net = DensePoisson(**optobj.opts['nn_opts'],
+#     net = DenseNet(**optobj.opts['nn_opts'],
 #                                 output_transform=pde.output_transform,
 #                                 params_dict=pde.param)
 
