@@ -42,6 +42,7 @@ default_opts = {
         'with_param': True,
         'fourier':False,
         'siren': False,
+        'with_func': False,
     },
     
     'dataset_opts': {
@@ -82,6 +83,7 @@ default_opts = {
         'data': 1.0,
         'paramgrad': None,
         'bc':None,
+        'funcloss':None, #mse of unknonw function
     },
     'loss_opts': {
         'msample':100, #number of samples for resgrad
@@ -250,7 +252,6 @@ class Options:
         if self.opts['traintype'] == 'basic':
             self.opts['weights']['resgrad'] = None
             self.opts['weights']['fullresgrad'] = None
-            
             self.opts['nn_opts']['with_param'] = False
             assert self.opts['pde_opts']['trainable_param'] != '', 'trainable_param should not be empty for basic training'
         
@@ -305,6 +306,7 @@ class Options:
             # inverse problem, use exact D to gen data
             if self.opts['traintype'] == 'adj-simu':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
+        
         
         if self.opts['pde_opts']['problem'] == 'gbm':
             # merge gbm_opts to pde_opts

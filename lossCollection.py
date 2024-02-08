@@ -23,14 +23,13 @@ class lossCollection:
 
         # intermediate results for residual loss
         self.res = None
-        self.mse_res = None
         self.grad_res_params = {} # gradient of residual w.r.t. parameter
         self.u_pred = None
 
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 
         'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
-        'bc': self.bcloss}
+        'bc': self.bcloss,'funcloss':self.funcloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -57,7 +56,6 @@ class lossCollection:
     def resloss(self):
         self.res, self.u_pred = self.pde.get_res_pred(self.net)
         val_loss_res = mse(self.res)
-        self.mse_res = val_loss_res
         return val_loss_res
 
     # def computeResidualGrad(self):
@@ -183,6 +181,10 @@ class lossCollection:
     def bcloss(self):
         # compute loss from boundary condition
         return self.pde.get_bc_loss(self.net)
+    
+    def funcloss(self):
+        # compute loss from parameter
+        return self.pde.func_mse(self.net)
     
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight

@@ -6,7 +6,7 @@ from GBMproblem import GBMproblem
 from PoissonProblem import PoissonProblem
 from SimpleODEProblem import SimpleODEProblem
 from LorenzProblem import LorenzProblem
-
+from PoiVarProblem import PoiVarProblem
 
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
@@ -20,6 +20,8 @@ def create_pde_problem(**kwargs):
         return FKproblem(**kwargs)
     elif problem_type == 'gbm':
         return GBMproblem(**kwargs)
+    elif problem_type == 'poivar':
+        return PoiVarProblem(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

@@ -17,6 +17,7 @@ class DenseNet(nn.Module):
                 use_resnet=False, with_param=False, params_dict=None, 
                 fourier=False,
                 siren=False,
+                with_func=False,
                 trainable_param=[]):
         super().__init__()
         
@@ -25,6 +26,7 @@ class DenseNet(nn.Module):
         self.width = width
         self.use_resnet = use_resnet
         self.with_param = with_param # if True, then the pde parameter is part of the network
+        self.with_func = with_func # if True, then the unkonwn is a function
         self.output_transform = output_transform # transform the output of the network, default is identity
         self.fourier = fourier
         
@@ -60,6 +62,11 @@ class DenseNet(nn.Module):
             for embedding_weights in self.param_embeddings.parameters():
                 embedding_weights.requires_grad = False
 
+        # for now, just one function
+        if self.with_func:
+            self.func_param = create_param_function(input_dim=1, output_dim=1, depth=4, width=16)
+            
+
         # activation function
         if siren:
             self.act = torch.sin
@@ -92,8 +99,12 @@ class DenseNet(nn.Module):
 
         self.param_pde = list(self.params_dict.values())
         
-        # if optimizer include all parameters
-        self.param_all = self.param_net + self.param_pde
+        # For vanilla version, optimizer include all parameters
+        # include untrainable parameters, so that the optimizer have the parameter in state_dict
+        if not self.with_func:
+            self.param_all = self.param_net + self.param_pde
+        else:
+            self.param_all = self.param_net + list(self.func_param.parameters())
 
         # collection of trainable parameters
         self.param_pde_trainable = [param for param in self.param_pde if param.requires_grad]
@@ -125,20 +136,39 @@ class DenseNet(nn.Module):
         otherwise, then Wy+b
 
         '''
+        
         # fourier feature embedding
         if self.fourier:
             x = torch.sin(2 * torch.pi * self.fflayer(x))
         x = self.input_layer(x)
         
-        for name, param in params_dict.items():
-            if self.with_param:
-                # expand the parameter to the same size as x
-                self.params_expand[name] = param.expand(x.shape[0], -1)
-                v = self.params_expand[name] # (batch, 1)
+        if self.with_param :
+            if not self.with_func:
+                for name, param in params_dict.items():
+                    # expand the parameter to the same size as x
+                    self.params_expand[name] = param.expand(x.shape[0], -1)
+                    v = self.params_expand[name] # (batch, 1)
+                    param_embedding = self.param_embeddings[name](v)
+                    x += param_embedding
+            else:
+                # params_dict is already f(x)
+                # warning, assume only one function
+                v = params_dict
                 param_embedding = self.param_embeddings[name](v)
                 x += param_embedding
+        
+        else:
+            if not self.with_func:
+                # for vanilla version, no parameter embedding
+                # copy params_dict to params_expand
+                for name, param in params_dict.items():
+                    self.params_expand[name] = params_dict[name]
             else:
-                self.params_expand[name] = params_dict[name]
+                # do nothing with params_dict
+                pass
+
+            
+            
 
         return x
         
@@ -219,6 +249,17 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
     print(f'net loaded from {artifact_paths["net.pth"]}')
     return net, opts
 
+def create_param_function(input_dim=1, output_dim=1, depth=4, width=16):
+    # Create and return a simple neural network
+    layers = []
+    # input layer
+    layers.append(nn.Linear(input_dim, width))
+    # hidden layers
+    for _ in range(depth - 2):
+        layers.append(nn.Linear(width, width))
+    # output layer
+    layers.append(nn.Linear(width, output_dim))
+    return nn.Sequential(*layers)
 
 # simple test of the network
 # creat a network, compute residual, compute loss, no training

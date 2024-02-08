@@ -37,7 +37,9 @@ class Trainer:
     def log_stat(self, wloss_comp, epoch):
         # log statistics
         self.logger.log_metrics(wloss_comp, step=epoch)
-        self.logger.log_metrics(self.net.params_dict, step=epoch)
+        if not self.net.with_func:
+            # log network parameters if param not function
+            self.logger.log_metrics(self.net.params_dict, step=epoch)
     
     def set_grad(self, params, loss):
         '''
@@ -116,9 +118,11 @@ class Trainer:
         start = time.time()
         try:
             self.ftrain()
+        except KeyboardInterrupt:
+            print('Interrupted by user')
+            self.info.update({'error':'interrupted by user'})
         except Exception as e:
-            print(f'error: {e}')
-            self.info.update({'error':str(e)})
+            raise e
         
         # log training info
         end = time.time()
