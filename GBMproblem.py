@@ -156,6 +156,8 @@ class GBMproblem(BaseProblem):
         ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['upred_dat_train'], fname = 'fig_upred_dat_train.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_res_train'], self.dataset['upred_res_train'], fname = 'fig_upred_res_train.png', savedir=savedir)
+
+        ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['u_dat_train'], fname = 'fig_u_dat_train.png', savedir=savedir)
     
     def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''
@@ -190,6 +192,7 @@ class GBMproblem(BaseProblem):
         if 'res' in self.whichdata:
             self.dataset['X_dat_train'] = self.dataset['X_res_train']
             self.dataset['phi_dat_train'] = self.dataset['phi_res_train']
+            ds_opts['N_dat_train'] = ds_opts['N_res_train']
             print('use res data for data loss, change X_dat_train and phi_dat_train')
         
         

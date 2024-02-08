@@ -277,6 +277,9 @@ class Options:
         self.opts['train_opts']['loss_net'] = [loss for loss in self.opts['train_opts']['loss_net'] if self.opts['weights'][loss] is not None]
         self.opts['train_opts']['loss_pde'] = [loss for loss in self.opts['train_opts']['loss_pde'] if self.opts['weights'][loss] is not None]
 
+        # add data to loss_net if net_data is True
+        if self.opts['train_opts']['net_data'] == True:
+            self.opts['train_opts']['loss_net'].append('data')
 
         # After traintype is processed 
         # convert trainable param to list of string, split by ','

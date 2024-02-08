@@ -115,9 +115,10 @@ class DensePoisson(nn.Module):
     def embedding(self, x, params_dict=None):
         '''
         No fourier feature embedding:
-            then y = x
+            then y = Wx+b = input_layer(x)
         if fourier feature embedding:
-            then y = sin(2*pi* (Wx+b))
+            then z = sin(2*pi* (Wx+b))
+            then y = Wz+b = input_layer(z)
         
         if with_param, then Wy+b + W'p+b' (pde parameter embedding)
         This is the same as concat [x, pde_param] and then do a linear layer
@@ -127,9 +128,7 @@ class DensePoisson(nn.Module):
         # fourier feature embedding
         if self.fourier:
             x = torch.sin(2 * torch.pi * self.fflayer(x))
-        else:
-            x = self.input_layer(x)
-
+        x = self.input_layer(x)
         
         for name, param in params_dict.items():
             if self.with_param:
