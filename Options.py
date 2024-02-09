@@ -29,6 +29,7 @@ default_opts = {
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
         'use_res': False, # only used in fkproblem, use res as training data
+        'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
     },
     'gbm_opts': {
         'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
@@ -218,6 +219,7 @@ class Options:
 
     def processing(self):
         self.opts['flags'] = self.opts['flags'].split(',')
+        assert all([flag in ['small','local','wunit','fixiter'] for flag in self.opts['flags']]), 'invalid flag'
 
         if 'small' in self.opts['flags']:
             # use small network for testing

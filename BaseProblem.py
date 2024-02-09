@@ -25,6 +25,10 @@ class BaseProblem(ABC):
     def residual(self, nn, x):
         pass
 
+    @abstractmethod
+    def validate(self, nn):
+        pass
+
     def get_res_pred(self, net):
         ''' get residual and prediction'''
         res, pred = self.residual(net, self.dataset['x_res_train'])

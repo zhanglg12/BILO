@@ -36,6 +36,9 @@ class Trainer:
 
     def log_stat(self, wloss_comp, epoch):
         # log statistics
+        if wloss_comp is None:
+            return
+        
         self.logger.log_metrics(wloss_comp, step=epoch)
         if not self.net.with_func:
             # log network parameters if param not function
@@ -157,6 +160,8 @@ class Trainer:
             # print statistics at interval or at stop
             if epoch % self.opts['print_every'] == 0 or stophere:
                 self.log_stat(wloss_comp, epoch)
+                val = self.pde.validate(self.net)
+                self.log_stat(val, epoch)
             if stophere:
                 break
             
@@ -322,6 +327,8 @@ class Trainer:
                 wloss_comp['lowertot'] = loss_lower
 
                 log_stat(wloss_comp, 1, epoch)
+                val = self.pde.validate(self.net)
+                self.log_stat(val, epoch)
             ### end of lower level
 
             if epoch_lower > 0:
@@ -338,7 +345,10 @@ class Trainer:
                 
                 loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
                 wloss_comp['lowertot'] = loss_lower
+                
                 log_stat(wloss_comp, 0, epoch)
+                val = self.pde.validate(self.net)
+                self.log_stat(val, epoch)
 
             # take gradient of data loss w.r.t pde parameter
             self.set_pde_param_grad(self.lossCollection.wloss_comp['data'])
@@ -371,6 +381,8 @@ class Trainer:
 
             # print statistics at interval or at stop
             if epoch % self.opts['print_every'] == 0 or stophere:
+                val = self.pde.validate(self.net)
+                self.log_stat(val, epoch)
                 self.log_stat(self.lossCollection.wloss_comp, epoch)
             if stophere:
                 break  

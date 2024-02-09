@@ -16,37 +16,63 @@ class PoiVarProblem(BaseProblem):
         super().__init__()
         self.input_dim = 1
         self.output_dim = 1
-        self.tag=['exact']
+        
 
         self.opts=kwargs
         # default 1
         self.p = 1
 
         self.param = {'D': kwargs['exact_param']}
-        
+        self.testcase = kwargs['testcase']
+
 
         self.output_transform = lambda x, u: u * x * (1 - x)
         self.dataset = None
 
+    def D_exact(self, x):
+        if self.testcase == 0:
+            # constant coefficient
+            return self.param['D']
+        elif self.testcase == 1:
+            # variable coefficient
+            return 1 + 0.5 * torch.sin(2 * torch.pi * x)
+        else:
+            raise ValueError('Invalid testcase')
+    
+    def f(self, x):
+        if self.testcase == 0:
+            return -(torch.pi )**2 * torch.sin(torch.pi  * x)
+        elif self.testcase == 1:
+            v =  torch.pi**2 * torch.cos(torch.pi * x) * torch.cos(2 * torch.pi * x) - \
+            torch.pi**2 * torch.sin(torch.pi * x) * (1 + 0.5 * torch.sin(2 * torch.pi * x))
+            return v
+        else:
+            raise ValueError('Invalid testcase')
+
+    def u_exact(self, x):
+        if self.testcase == 0:
+            return torch.sin(torch.pi  * x) / self.param['D']
+        elif self.testcase == 1:
+            return torch.sin(torch.pi  * x)
+        else:
+            raise ValueError('Invalid testcase')
+        
 
     def residual(self, nn, x):
-        def f(x):
-            return -(torch.pi * self.p)**2 * torch.sin(torch.pi * self.p * x)
+        
         x.requires_grad_(True)
         
-        Dx = nn.func_param(x) # D(x)
-        u_pred = nn(x, {'D': Dx} )
-        u_x = torch.autograd.grad(u_pred, x,
-            create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
-        u_xx = torch.autograd.grad(u_x, x,
+        
+        u = nn(x, None)
+        D = nn.params_expand['D']
+        u_x = torch.autograd.grad(u, x,
+            create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
+        u_xx = torch.autograd.grad(u_x * D, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         
-        res = Dx * u_xx - f(x)
+        res = u_xx - self.f(x)
 
-        return res, u_pred
-
-    def u_exact(self, x, param:dict):
-        return torch.sin(torch.pi * self.p * x) / param['D']
+        return res, u
 
     def print_info(self):
         # print info of pde
@@ -66,16 +92,16 @@ class PoiVarProblem(BaseProblem):
 
         # data col-pt, for testing, use exact param
         dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
-        dataset['u_dat_test'] = self.u_exact(dataset['x_dat_test'], self.param)
+        dataset['u_dat_test'] = self.u_exact(dataset['x_dat_test'])
 
         # data col-pt, for initialization use init_param, for training use exact_param
         dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
 
-        dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'], self.param)
+        dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'])
 
         # D(x) at collocation point
-        dataset['D_dat_train'] = torch.full_like(dataset['x_dat_train'], self.param['D'])
-        dataset['D_res_train'] = torch.full_like(dataset['x_res_train'], self.param['D'])
+        dataset['D_dat_train'] = self.D_exact(dataset['x_dat_train'])
+        dataset['D_dat_test'] = self.D_exact(dataset['x_dat_test'])
 
         self.dataset = dataset
 
@@ -122,51 +148,59 @@ class PoiVarProblem(BaseProblem):
             key = f'upred_del{delta}_dat_test'
             self.dataset[key] = u_test
 
-
-    def visualize(self, savedir=None):
-        '''iterat through dataset, plot x_dat_test, (var)_data_test '''
-        for k, v in self.dataset.items():
-            # skip variation
-            if k.startswith('upred_del'):
-                continue
-
-            y = v
-
-            if k.endswith('dat_test') and k!='x_dat_test':
-                x = self.dataset['x_dat_test']
-            elif k.endswith('res_test') and k!='x_res_test':
-                x = self.dataset['x_res_test']
-            else:
-                continue
-
-            
-            plt.plot(x, y, label=k)
-            plt.xlim(0, 1) # fix
-            plt.grid()
-            plt.legend()
-
-            plt.show()
-            
-            if savedir is not None:
-                path = os.path.join(savedir, 'fig_' + k + '.png')
-                plt.savefig(path, dpi=300, bbox_inches='tight')
-                print(f'fig saved to {path}')
-            plt.close()
+    def validate(self, nn):
+        '''compute l2 error and linf error of inferred D(x)'''
+        x  = self.dataset['x_dat_test']
+        D = self.D_exact(x)
+        with torch.no_grad():
+            Dpred = nn.func_param(x)
+            l2norm = torch.mean(torch.square(D - Dpred))
+            linfnorm = torch.max(torch.abs(D - Dpred)) 
         
-        # plot prediction variation
-        x = self.dataset['x_dat_test']
-        for delta in [0.0, 0.1, -0.1]:
-            key = f'upred_del{delta}_dat_test'
-            plt.plot(x, self.dataset[key], label=f'Delta {delta}')
-        
-        plt.xlim(0, 1) # fix
-        plt.grid()
-        plt.legend()
+        return {'l2err': l2norm.item(), 'linferr': linfnorm.item()}
 
+    def plot_upred(self, savedir=None):
+        fig, ax = plt.subplots()
+        ax.plot(self.dataset['x_dat_test'], self.dataset['u_dat_test'], label='Exact')
+        ax.plot(self.dataset['x_dat_test'], self.dataset['upred_dat_test'], label='NN')
+        ax.scatter(self.dataset['x_dat_train'], self.dataset['u_dat_train'], label='data')
+        ax.legend(loc="best")
         if savedir is not None:
-            path = os.path.join(savedir, 'fig_prediction_variation.png')
+            path = os.path.join(savedir, 'fig_upred.png')
             plt.savefig(path, dpi=300, bbox_inches='tight')
             print(f'fig saved to {path}')
+    
+    def plot_Dpred(self, savedir=None):
+        ''' plot predicted d and exact d'''
+        fig, ax = plt.subplots()
+        ax.plot(self.dataset['x_dat_test'], self.dataset['D_dat_test'], label='Exact')
+        ax.plot(self.dataset['x_dat_test'], self.dataset['func_dat_test'], label='NN')
+        ax.legend(loc="best")
+        if savedir is not None:
+            path = os.path.join(savedir, 'fig_D_pred.png')
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {path}')
+
+    def visualize(self, savedir=None):
+        '''visualize the problem'''
+        self.plot_upred(savedir)
+        self.plot_Dpred(savedir)
+        
+        
+        # plot prediction variation
+        # x = self.dataset['x_dat_test']
+        # for delta in [0.0, 0.1, -0.1]:
+        #     key = f'upred_del{delta}_dat_test'
+        #     plt.plot(x, self.dataset[key], label=f'Delta {delta}')
+        
+        # plt.xlim(0, 1) # fix
+        # plt.grid()
+        # plt.legend()
+
+        # if savedir is not None:
+        #     path = os.path.join(savedir, 'fig_prediction_variation.png')
+        #     plt.savefig(path, dpi=300, bbox_inches='tight')
+        #     print(f'fig saved to {path}')
 
                 
         

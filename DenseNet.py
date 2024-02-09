@@ -163,7 +163,7 @@ class DenseNet(nn.Module):
             else:
                 # evaluted func_param at xcoord, then do embedding
                 # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
-                for name in self.param_embeddings.keys():
+                for name in self.params_dict.keys():
                     param_vector = self.func_param(xcoord)
                     self.params_expand[name] = param_vector
                     param_embedding = self.param_embeddings[name](param_vector)
@@ -176,8 +176,8 @@ class DenseNet(nn.Module):
                 for name, param in params_dict.items():
                     self.params_expand[name] = params_dict[name]
             else:
-                # do nothing with params_dict
-                pass
+                for name in self.params_dict.keys():
+                    self.params_expand[name] =  self.func_param(xcoord)
 
             
             
