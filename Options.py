@@ -219,7 +219,7 @@ class Options:
     def processing(self):
         self.opts['flags'] = self.opts['flags'].split(',')
 
-        if 'smallrun' in self.opts['flags']:
+        if 'small' in self.opts['flags']:
             # use small network for testing
             self.opts['nn_opts']['depth'] = 4
             self.opts['nn_opts']['width'] = 2

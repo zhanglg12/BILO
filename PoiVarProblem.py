@@ -35,7 +35,7 @@ class PoiVarProblem(BaseProblem):
         x.requires_grad_(True)
         
         Dx = nn.func_param(x) # D(x)
-        u_pred = nn(x, Dx)
+        u_pred = nn(x, {'D': Dx} )
         u_x = torch.autograd.grad(u_pred, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_pred))[0]
         u_xx = torch.autograd.grad(u_x, x,
@@ -95,19 +95,43 @@ class PoiVarProblem(BaseProblem):
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
+            
+            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'], None)
             coef = net.func_param(self.dataset['x_res_test'])
-            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'], coef)
             self.dataset['func_res_test'] = coef
 
 
+            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'], None)
             coef = net.func_param(self.dataset['x_dat_test'])
-            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'], coef)
             self.dataset['func_dat_test'] = coef
+        
+        # make prediction with different parameters
+        self.prediction_variation(net)
+
+    def prediction_variation(self, net):
+        # make prediction with different parameters
+        x_test = self.dataset['x_dat_test']
+        deltas = [0.0, 0.1, -0.1]
+
+        for delta in deltas:
+            # replace parameter
+            with torch.no_grad():
+                
+                u_test = net(x_test, None)
+                
+            key = f'upred_del{delta}_dat_test'
+            self.dataset[key] = u_test
+
 
     def visualize(self, savedir=None):
         '''iterat through dataset, plot x_dat_test, (var)_data_test '''
         for k, v in self.dataset.items():
+            # skip variation
+            if k.startswith('upred_del'):
+                continue
+
             y = v
+
             if k.endswith('dat_test') and k!='x_dat_test':
                 x = self.dataset['x_dat_test']
             elif k.endswith('res_test') and k!='x_res_test':
@@ -128,6 +152,21 @@ class PoiVarProblem(BaseProblem):
                 plt.savefig(path, dpi=300, bbox_inches='tight')
                 print(f'fig saved to {path}')
             plt.close()
+        
+        # plot prediction variation
+        x = self.dataset['x_dat_test']
+        for delta in [0.0, 0.1, -0.1]:
+            key = f'upred_del{delta}_dat_test'
+            plt.plot(x, self.dataset[key], label=f'Delta {delta}')
+        
+        plt.xlim(0, 1) # fix
+        plt.grid()
+        plt.legend()
+
+        if savedir is not None:
+            path = os.path.join(savedir, 'fig_prediction_variation.png')
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {path}')
 
                 
         

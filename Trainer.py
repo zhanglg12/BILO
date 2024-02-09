@@ -53,8 +53,9 @@ class Trainer:
         '''
         set gradient of loss w.r.t pde parameter
         '''
+        # import pdb; pdb.set_trace()
         params = self.net.param_pde_trainable
-        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=True)
+        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=False)
         for param, grad in zip(params, grads):
             param.grad = grad
 
@@ -72,7 +73,7 @@ class Trainer:
             # learning rate for pde parameter is 0
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde, 'lr': 0.0}
+                {'params': self.net.param_pde_trainable, 'lr': 0.0}
             ]
             self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
             self.ftrain = self.train_simu
@@ -82,7 +83,7 @@ class Trainer:
             # single optimizer for all parameters, different learning rate for net and pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             self.optimizer['allparam'] = optim.Adam(optim_param_group, amsgrad=True)
             self.ftrain = self.train_simu
@@ -90,7 +91,7 @@ class Trainer:
             # two optimizer, one for net, one for pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             # all parameters
             self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
@@ -145,6 +146,7 @@ class Trainer:
             self.lossCollection.getloss()
 
             loss_net = self.lossCollection.get_wloss_sum(self.loss_net)
+            loss_pde = self.lossCollection.get_wloss_sum(self.loss_pde)
             
             wloss_comp.update(self.lossCollection.wloss_comp)
             wloss_comp['lowertot'] = loss_net
@@ -160,7 +162,7 @@ class Trainer:
             
             # take gradient of data loss w.r.t pde parameter
             # self.set_grad(self.net.param_pde, self.lossCollection.wloss_comp['data'])
-            self.set_pde_param_grad(self.lossCollection.wloss_comp['data'])
+            self.set_pde_param_grad(loss_pde)
             
             # take gradient of residual loss w.r.t network parameter
             self.set_grad(self.net.param_net, loss_net)
