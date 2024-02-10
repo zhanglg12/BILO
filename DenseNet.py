@@ -173,7 +173,7 @@ class DenseNet(nn.Module):
             if self.with_func is False:
                 # for vanilla version, no parameter embedding
                 # copy params_dict to params_expand
-                for name, param in params_dict.items():
+                for name, param in self.params_dict.items():
                     self.params_expand[name] = params_dict[name]
             else:
                 for name in self.params_dict.keys():

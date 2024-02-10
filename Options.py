@@ -13,6 +13,7 @@ default_opts = {
                     'save_dir':'tmp'},
     'restore': '',
     'traintype': 'basic',
+    'trainfcn':'', # init or inv
     'flags': '', 
     'device': 'cuda',
     'seed': 0,
@@ -218,6 +219,7 @@ class Options:
         return param_val_dict
 
     def processing(self):
+        ''' handle dependent options '''
         self.opts['flags'] = self.opts['flags'].split(',')
         assert all([flag in ['small','local','wunit','fixiter'] for flag in self.opts['flags']]), 'invalid flag'
 
@@ -273,6 +275,22 @@ class Options:
                 # set use_dat to False
                 self.opts['train_opts']['net_data'] = False
 
+        if self.opts['trainfcn'] != '':
+            
+            assert self.opts['trainfcn'] in {'init','inv'}, 'invalid trainfcn'
+            self.opts['nn_opts']['with_func'] = True
+            
+            if self.opts['trainfcn'] == 'init':
+                # for initialization, use mse to train unkonwn function
+                self.opts['train_opts']['loss_pde'] = 'funcloss'
+                self.opts['weights']['funcloss'] = 1.0
+                # for initialization, use data loss for network weights
+                self.opts['train_opts']['net_data'] = True
+            
+            if self.opts['trainfcn'] == 'inv':
+                # for inverse problem, use data loss for network weights
+                self.opts['loss_pde'] = 'data'
+
         # convert to list of losses
         self.opts['train_opts']['loss_net'] = self.opts['train_opts']['loss_net'].split(',')
         self.opts['train_opts']['loss_pde'] = self.opts['train_opts']['loss_pde'].split(',')
@@ -294,7 +312,8 @@ class Options:
         if self.opts['pde_opts']['init_param'] != '':
             self.opts['pde_opts']['init_param'] = self.convert_to_dict(self.opts['pde_opts']['init_param'])
 
-        
+
+
         # has to be after init_param is processed
         # for poisson problem, set init_param and exact_param
         if self.opts['pde_opts']['problem'] == 'poisson':
