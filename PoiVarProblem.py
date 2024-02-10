@@ -26,26 +26,42 @@ class PoiVarProblem(BaseProblem):
         self.testcase = kwargs['testcase']
 
 
-        self.output_transform = lambda x, u: u * x * (1 - x)
+        
+        self.output_transform = lambda x, u: u * x * (1.0 - x)
+
         self.dataset = None
 
     def D_exact(self, x):
         if self.testcase == 0:
             # constant coefficient
-            return self.param['D']
+            return self.param['D'] * torch.ones_like(x)
         elif self.testcase == 1:
             # variable coefficient
-            return 1 + 0.5 * torch.sin(2 * torch.pi * x)
+            return 1 +  0.5*torch.sin(2 * torch.pi * x)
+        elif self.testcase == 2:
+            return 1.0 + torch.sin(torch.pi * x)
+        elif self.testcase == 3:
+            # x^4 if x<0.5, 1/2(x^4 + 1/16) if x>=0.5
+            return torch.where(x < 0.5, 1.0, 2.0)
+        elif self.testcase == 4:
+            return torch.ones_like(x)
         else:
             raise ValueError('Invalid testcase')
     
     def f(self, x):
         if self.testcase == 0:
-            return -(torch.pi )**2 * torch.sin(torch.pi  * x)
+            return -(torch.pi )**2 * torch.sin(torch.pi * x)
         elif self.testcase == 1:
+            
             v =  torch.pi**2 * torch.cos(torch.pi * x) * torch.cos(2 * torch.pi * x) - \
-            torch.pi**2 * torch.sin(torch.pi * x) * (1 + 0.5 * torch.sin(2 * torch.pi * x))
+            torch.pi**2 * torch.sin(torch.pi * x) * (1 + 0.5*torch.sin(2 * torch.pi * x))
             return v
+        elif self.testcase == 2:
+            # same as testcase 0, different D
+            return - (torch.pi )**2 * torch.sin(torch.pi * x)
+        elif self.testcase == 3 or self.testcase == 4:
+            # https://www.sciencedirect.com/science/article/pii/S0377042718306344
+            return 12 * x**2
         else:
             raise ValueError('Invalid testcase')
 
@@ -54,6 +70,13 @@ class PoiVarProblem(BaseProblem):
             return torch.sin(torch.pi  * x) / self.param['D']
         elif self.testcase == 1:
             return torch.sin(torch.pi  * x)
+        elif self.testcase == 2:
+            return 2 * torch.log(torch.cos(torch.pi * x/2.0)+torch.sin(torch.pi * x/2.0))
+        elif self.testcase == 3:
+            # x^4 if x<0.5, 1/2(x^4 + 1/16) if x>=0.5
+            return torch.where(x < 0.5, x**4, 0.5 * (x**4 + 1/16)) -  17.0/32.0 * x
+        elif self.testcase == 4:
+            return -x + x**4
         else:
             raise ValueError('Invalid testcase')
         
@@ -101,6 +124,7 @@ class PoiVarProblem(BaseProblem):
 
         # D(x) at collocation point
         dataset['D_dat_train'] = self.D_exact(dataset['x_dat_train'])
+        dataset['D_res_train'] = self.D_exact(dataset['x_res_train'])
         dataset['D_dat_test'] = self.D_exact(dataset['x_dat_test'])
 
         self.dataset = dataset
