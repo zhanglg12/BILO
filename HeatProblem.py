@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # PoissonProblem with variable parameter
 import torch
+from torch import nn
 import os
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -12,7 +13,6 @@ from BaseProblem import BaseProblem
 from DataSet import DataSet
 from DenseNet import DenseNet, ParamFunction
 
-
 class HeatDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
     def __init__(self, **kwargs):
@@ -20,6 +20,9 @@ class HeatDenseNet(DenseNet):
         
         # override the embedding function, also enforce dirichlet boundary condition
         self.func_param = ParamFunction(depth=4, width=32, output_transform=lambda x, u: u * x * (1.0 - x))
+        
+        self.collect_trainable_param()
+
 
     def embedding(self, x, params_dict=None):
         # override the embedding function
@@ -80,6 +83,7 @@ class HeatProblem(BaseProblem):
  
         self.testcase = kwargs['testcase']
         self.D = kwargs['D']
+        self.use_res = kwargs['use_res']
 
         # placeholder for parameter, only name is used
         self.param = {'u0': 0.0}
@@ -130,6 +134,8 @@ class HeatProblem(BaseProblem):
     
     def residual(self, nn, X_in):
         
+        X_in.requires_grad = True
+        
         t = X_in[:, 0:1]
         x = X_in[:, 1:2]
         
@@ -149,6 +155,22 @@ class HeatProblem(BaseProblem):
         res = u_t - self.D * u_xx
 
         return res, u
+
+    def get_res_pred(self, net):
+        ''' get residual and prediction'''
+        res, pred = self.residual(net, self.dataset['X_res'])
+        return res, pred
+    
+    def get_data_loss(self, net):
+        # get data loss
+        if self.use_res:
+            u_pred = net(self.dataset['X_res'],None)
+            loss = torch.mean(torch.square(u_pred - self.dataset['u_res']))
+        else:
+            u_pred = net(self.dataset['X_dat'],None)
+            loss = torch.mean(torch.square(u_pred - self.dataset['u_dat']))
+        
+        return loss
 
     def setup_network(self, **kwargs):
         '''setup network, get network structure if restore'''
@@ -231,7 +253,7 @@ class HeatProblem(BaseProblem):
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
         x  = self.dataset['x_ic']
-        u0_exact = self.u0_exact(x)
+        u0_exact = self.dataset['u0_exact_ic']
         with torch.no_grad():
             u0_pred = nn.func_param(x)
             err = u0_exact - u0_pred
@@ -246,6 +268,7 @@ class HeatProblem(BaseProblem):
         ax.plot(x, self.dataset['u_dat'], label='exact')
         ax.plot(x, self.dataset['upred_dat'], label='NN')
         ax.legend(loc="best")
+        ax.grid()
         if savedir is not None:
             path = os.path.join(savedir, 'fig_upred_xdat.png')
             plt.savefig(path, dpi=300, bbox_inches='tight')
@@ -253,24 +276,33 @@ class HeatProblem(BaseProblem):
     
     def plot_upred_res_meshgrid(self, savedir=None):
         # plot u at X_res, 
-        fig, ax = plt.subplots(1, 3)
+        
         
         u = self.dataset['u_res']
         u_pred = self.dataset['upred_res']
-        err = u - u_pred
+        
 
         # reshape to 2D
-        u = u.reshape(self.dataset['Nt'], self.dataset['Nx'])
-        u_pred = u_pred.reshape(self.dataset['Nt'], self.dataset['Nx'])
+        u = u.reshape(self.dataset['Nx'],self.dataset['Nt'])
+        u_pred = u_pred.reshape(self.dataset['Nx'],self.dataset['Nt'])
+        err = u - u_pred
+
+        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
         # 2D plot
-        ax[0].imshow(u_pred , cmap='viridis', extent=[0, 1, 0, 1], origin='lower', vmin=0, vmax=1)
+        cax = ax[0].imshow(u_pred , cmap='viridis', extent=[0, 1, 0, 1], origin='lower')
         ax[0].set_title('NN')
+        fig.colorbar(cax, ax=ax[0])
 
-        ax[1].imshow(u , cmap='viridis', extent=[0, 1, 0, 1], origin='lower', vmin=0, vmax=1)
+        cax = ax[1].imshow(u , cmap='viridis', extent=[0, 1, 0, 1], origin='lower')
         ax[1].set_title('Exact')
+        fig.colorbar(cax, ax=ax[1])
 
-        ax[2].imshow(err, cmap='viridis', extent=[0, 1, 0, 1], origin='lower')
+        cax = ax[2].imshow(err, cmap='viridis', extent=[0, 1, 0, 1], origin='lower')
         ax[2].set_title('Error')
+        fig.colorbar(cax, ax=ax[2])
+
+        fig.tight_layout()
+
 
         if savedir is not None:
             path = os.path.join(savedir, 'fig_upred_grid.png')
@@ -288,16 +320,20 @@ class HeatProblem(BaseProblem):
         tidx = np.linspace(0, self.dataset['Nt']-1, N, dtype=int)
 
         # reshape to 2D
-        u = u.reshape(self.dataset['Nt'], self.dataset['Nx'])
-        u_pred = u_pred.reshape(self.dataset['Nt'], self.dataset['Nx'])
-
+        u = u.reshape(self.dataset['Nx'],self.dataset['Nt'])
+        u_pred = u_pred.reshape(self.dataset['Nx'],self.dataset['Nt'])
         fig, ax = plt.subplots()
+        
+        # get colororder
+        C = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        k = 0
         for i in tidx:
             # plot u at each t
-            ax.plot(u[:, i], label=f'Exact t={i/self.dataset["Nt"]:.2f}')
-            ax.plot(u_pred[:, i], label=f'NN t={i/self.dataset["Nt"]:.2f}', linestyle='--')
-            
-        
+            ax.plot(u[:, i], label=f'Exact t={i/self.dataset["Nt"]:.2f}', color=C[k])
+            ax.plot(u_pred[:, i], label=f'NN t={i/self.dataset["Nt"]:.2f}', linestyle='--', color=C[k])
+            k += 1
+        ax.legend(loc="best")
+        ax.grid()
 
         if savedir is not None:
             path = os.path.join(savedir, 'fig_upred_xres.png')

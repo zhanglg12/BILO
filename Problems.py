@@ -7,6 +7,7 @@ from PoissonProblem import PoissonProblem
 from SimpleODEProblem import SimpleODEProblem
 from LorenzProblem import LorenzProblem
 from PoiVarProblem import PoiVarProblem
+from HeatProblem import HeatProblem
 
 def create_pde_problem(**kwargs):
     problem_type = kwargs['problem']
@@ -22,6 +23,8 @@ def create_pde_problem(**kwargs):
         return GBMproblem(**kwargs)
     elif problem_type == 'poivar':
         return PoiVarProblem(**kwargs)
+    elif problem_type == 'heat':
+        return HeatProblem(**kwargs)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

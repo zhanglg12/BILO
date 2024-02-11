@@ -16,7 +16,7 @@ class BaseProblem(ABC):
         self.dataset = None
         self.input_dim = None
         self.output_dim = None
-        self.output_transform = None
+        self.lambda_transform = None
         self.param = {}
         self.opts = {}
         self.tag = []
@@ -61,7 +61,7 @@ class BaseProblem(ABC):
             pde_param.update(init_param)
 
         net = DenseNet(**kwargs,
-                            output_transform=self.output_transform,
+                            lambda_transform=self.lambda_transform,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])
         return net

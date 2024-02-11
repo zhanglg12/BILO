@@ -29,7 +29,7 @@ default_opts = {
         'trainable_param': '', # list of trainable parameters, e.g. 'D,rho'
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
-        'use_res': False, # only used in fkproblem, use res as training data
+        'use_res': False, # used in fkproblem and heatproblem, use res as training data
         'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
         # for heat problem
         'D': 0.1,
@@ -286,13 +286,14 @@ class Options:
 
         if self.opts['trainfcn'] != '':
             
+            
             assert self.opts['trainfcn'] in {'init','inv'}, 'invalid trainfcn'
             self.opts['nn_opts']['with_func'] = True
             
             if self.opts['trainfcn'] == 'init':
                 # for initialization, use mse to train unkonwn function
                 self.opts['train_opts']['loss_pde'] = 'funcloss'
-                self.opts['weights']['funcloss'] = 1.0
+                assert self.opts['weights']['funcloss'] is not None, 'funcloss weight should not be None'
                 # for initialization, use data loss for network weights
                 self.opts['train_opts']['net_data'] = True
             
@@ -322,6 +323,8 @@ class Options:
             self.opts['pde_opts']['init_param'] = self.convert_to_dict(self.opts['pde_opts']['init_param'])
 
 
+        if self.opts['pde_opts']['problem'] == 'heat':
+            self.opts['pde_opts']['trainable_param'] = ['u0']
 
         # has to be after init_param is processed
         # for poisson problem, set init_param and exact_param

@@ -88,9 +88,13 @@ class DenseNet(nn.Module):
                 param.requires_grad = False
             else:
                 param.requires_grad = True
+        
+        self.collect_trainable_param()
 
         
        
+    def collect_trainable_param(self):
+        '''setup trianable parameter'''
         # separate parameters for the neural net and the PDE parameters
         # neural net parameter exclude parameter embedding and fourier feature embedding layer
         self.param_net = list(self.input_layer.parameters()) +\
