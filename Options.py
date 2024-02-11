@@ -31,6 +31,8 @@ default_opts = {
         'datafile': '',
         'use_res': False, # only used in fkproblem, use res as training data
         'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
+        # for heat problem
+        'D': 0.1,
     },
     'gbm_opts': {
         'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
@@ -53,6 +55,10 @@ default_opts = {
         'N_res_test': 100,
         'N_dat_train': 100,
         'N_dat_test': 100,
+
+        # for heat problem
+        'Nx':51,
+        'Nt':51,
     },
     'train_opts': {
         'print_every': 20,
@@ -217,11 +223,14 @@ class Options:
         for i in range(0,len(param_val_list),2):
             param_val_dict[param_val_list[i]] = ast.literal_eval(param_val_list[i+1])
         return param_val_dict
-
+    
     def processing(self):
         ''' handle dependent options '''
-        self.opts['flags'] = self.opts['flags'].split(',')
-        assert all([flag in ['small','local','wunit','fixiter'] for flag in self.opts['flags']]), 'invalid flag'
+        if self.opts['flags'] != '':
+            self.opts['flags'] = self.opts['flags'].split(',')
+            assert all([flag in ['small','local','wunit','fixiter'] for flag in self.opts['flags']]), 'invalid flag'
+        else:
+            self.opts['flags'] = []
 
         if 'small' in self.opts['flags']:
             # use small network for testing
@@ -333,11 +342,7 @@ class Options:
             # merge gbm_opts to pde_opts
             self.opts['pde_opts'].update(self.opts['gbm_opts'])
             del self.opts['gbm_opts']
-
         
-    
-        
-
 
 
 if __name__ == "__main__":
