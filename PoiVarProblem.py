@@ -23,7 +23,7 @@ class PoiVarProblem(BaseProblem):
 
 
         
-        self.output_transform = lambda x, u: u * x * (1.0 - x)
+        self.lambda_transform = lambda x, u: u * x * (1.0 - x)
 
         self.dataset = None
 

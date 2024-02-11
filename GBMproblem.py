@@ -48,10 +48,10 @@ class GBMproblem(BaseProblem):
 
 
 
-        self.output_transform = torch.nn.Module()
-        self.output_transform.register_buffer('x0',  torch.tensor(self.x0))
-        self.output_transform.register_buffer('L', torch.tensor(self.L))
-        self.output_transform.forward = lambda X, u: self.ic(X, self.output_transform.x0, self.output_transform.L) + u * X[:,0:1]
+        self.lambda_transform = torch.nn.Module()
+        self.lambda_transform.register_buffer('x0',  torch.tensor(self.x0))
+        self.lambda_transform.register_buffer('L', torch.tensor(self.L))
+        self.lambda_transform.forward = lambda X, u: self.ic(X, self.lambda_transform.x0, self.lambda_transform.L) + u * X[:,0:1]
 
         self.dataset['X_res'].requires_grad_(True)  
         

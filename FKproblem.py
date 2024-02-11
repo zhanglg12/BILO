@@ -32,7 +32,7 @@ class FKproblem(BaseProblem):
         # ic, u(x) = 0.5*sin(pi*x)^2
         # bc, u(t,0) = 0, u(t,1) = 0
         # transform: u(x,t) = u0(x) + u_NN(x,t) * x * (1-x) * t
-        self.output_transform = lambda X, u: (0.5 * torch.sin(np.pi * X[:,1:2]) ** 2)+ u * X[:,1:2] * (1 - X[:,1:2]) * X[:,0:1]
+        self.lambda_transform = lambda X, u: (0.5 * torch.sin(np.pi * X[:,1:2]) ** 2)+ u * X[:,1:2] * (1 - X[:,1:2]) * X[:,0:1]
 
         self.dataset['X_res'].requires_grad_(True)  
 

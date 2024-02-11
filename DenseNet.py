@@ -13,7 +13,7 @@ from Options import *
 # the PDE parameter is also part of the network
 class DenseNet(nn.Module):
     def __init__(self, depth, width, input_dim=1, output_dim=1, 
-                output_transform=lambda x, u: u,
+                lambda_transform=lambda x, u: u,
                 use_resnet=False, with_param=False, params_dict=None, 
                 fourier=False,
                 siren=False,
@@ -27,7 +27,7 @@ class DenseNet(nn.Module):
         self.use_resnet = use_resnet
         self.with_param = with_param # if True, then the pde parameter is part of the network
         self.with_func = with_func # if True, then the unkonwn is a function
-        self.output_transform = output_transform # transform the output of the network, default is identity
+        self.lambda_transform = lambda_transform # transform the output of the network, default is identity
         self.fourier = fourier
         
 
@@ -64,7 +64,7 @@ class DenseNet(nn.Module):
 
         # for now, just one function
         if self.with_func:
-            self.func_param = create_param_function(input_dim=1, output_dim=1, depth=4, width=32)
+            self.func_param = ParamFunction(depth=4, width=32)
             
 
         # activation function
@@ -112,7 +112,11 @@ class DenseNet(nn.Module):
         else:
             self.param_pde_trainable = list(self.func_param.parameters())
 
-
+    def output_transform(self, x, u):
+        '''
+        transform the output of the network
+        '''
+        return self.lambda_transform(x, u)
     
     def siren_init(self):
         '''
@@ -178,9 +182,6 @@ class DenseNet(nn.Module):
             else:
                 for name in self.params_dict.keys():
                     self.params_expand[name] =  self.func_param(xcoord)
-
-            
-            
 
         return x
         
@@ -261,20 +262,56 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
     print(f'net loaded from {artifact_paths["net.pth"]}')
     return net, opts
 
-def create_param_function(input_dim=1, output_dim=1, depth=4, width=16):
-    # Create and return a simple neural network
-    layers = []
-    # input layer
-    layers.append(nn.Linear(input_dim, width))
-    layers.append(nn.Tanh())
-    # hidden layers
-    for _ in range(depth - 2):
-        layers.append(nn.Linear(width, width))
-        layers.append(nn.Tanh())
-    # output layer
-    layers.append(nn.Linear(width, output_dim))
-    layers.append(nn.Softplus())
-    return nn.Sequential(*layers)
+
+class ParamFunction(nn.Module):
+    '''represent unknown f(x) to be learned, diffusion field or initial condition'''
+    def __init__(self, depth=4, width=16, 
+                 activation='tanh', output_activation='softplus', 
+                 output_transform=lambda x, u: u):
+        super(ParamFunction, self).__init__()
+        
+        # represent single variable function
+        input_dim = 1
+        output_dim = 1
+
+        if activation == 'tanh':
+            activation = nn.Tanh
+        elif activation == 'relu':
+            activation = nn.ReLU
+        elif activation == 'sigmoid':
+            activation = nn.Sigmoid
+        else:
+            raise ValueError('activation function not supported')
+
+        if output_activation == 'softplus':
+            output_activation = nn.Softplus
+        else:
+            raise ValueError('output activation function not supported')
+
+
+        # Create the layers of the neural network
+        layers = []
+        # input layer
+        layers.append(nn.Linear(input_dim, width))
+        layers.append(activation())
+        # hidden layers
+        for _ in range(depth - 2):
+            layers.append(nn.Linear(width, width))
+            layers.append(activation())
+        # output layer
+        layers.append(nn.Linear(width, output_dim))
+        layers.append(output_activation())
+
+        # Store the layers as a sequential module
+        self.layers = nn.Sequential(*layers)
+
+        # Store the output transformation function
+        self.output_transform = output_transform
+
+    def forward(self, x):
+        # Define the forward pass
+        u = self.layers(x)
+        return self.output_transform(x, u)
 
 # simple test of the network
 # creat a network, compute residual, compute loss, no training

@@ -62,6 +62,7 @@ class DataSet(dict):
                 shape = value.shape
                 
             string += f'{key}:\t{typename}\t{shape}\n'
+        return string
     
     def save(self, file_path):
         '''save data set to .mat file

@@ -25,7 +25,7 @@ class PoissonProblem(BaseProblem):
         if kwargs.get('exact_param') is not None:
             self.param['D'] = kwargs['exact_param']['D']
 
-        self.output_transform = lambda x, u: u * x * (1 - x)
+        self.lambda_transform = lambda x, u: u * x * (1 - x)
 
 
     def residual(self, nn, x):
