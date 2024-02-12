@@ -2,6 +2,7 @@
 import sys
 import json
 import ast
+import warnings
 
 
 default_opts = {
@@ -31,7 +32,7 @@ default_opts = {
         'datafile': '',
         'use_res': False, # used in fkproblem and heatproblem, use res as training data
         'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
-        # for heat problem
+        # for heat problem and poisson problem
         'D': 0.1,
         'use_exact_u0':False,
     },
@@ -57,6 +58,8 @@ default_opts = {
         'N_dat_train': 100,
         'N_dat_test': 100,
 
+        # feature of unkonwn function
+        'Nxi': 11,
         # for heat problem
         'Nx':51,
         'Nt':51,
@@ -267,7 +270,8 @@ class Options:
             self.opts['weights']['resgrad'] = None
             self.opts['weights']['fullresgrad'] = None
             self.opts['nn_opts']['with_param'] = False
-            assert self.opts['pde_opts']['trainable_param'] != '', 'trainable_param should not be empty for basic training'
+            if self.opts['pde_opts']['trainable_param'] != '':
+                warnings.warn( 'trainable_param is empty for basic training')
         
         if self.opts['traintype'] == 'fwd':
             # for fwd problem, nn does not include parameter, no training on parameter
@@ -294,7 +298,8 @@ class Options:
             if self.opts['trainfcn'] == 'init':
                 # for initialization, use mse to train unkonwn function
                 self.opts['train_opts']['loss_pde'] = 'funcloss'
-                assert self.opts['weights']['funcloss'] is not None, 'funcloss weight should not be None'
+                if self.opts['weights']['funcloss'] is None:
+                    self.opts['weights']['funcloss'] = 1.0
                 # for initialization, use data loss for network weights
                 self.opts['train_opts']['net_data'] = True
             

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # PoissonProblem with variable parameter
 import torch
+import torch.nn as nn
 import os
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -11,6 +12,78 @@ from util import generate_grf, add_noise
 from BaseProblem import BaseProblem
 from DataSet import DataSet
 
+from DenseNet import DenseNet, ParamFunction
+
+class PoiDenseNet(DenseNet):
+    ''' override the embedding function of DenseNet'''
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # override the embedding function, also enforce dirichlet boundary condition
+        self.func_param = ParamFunction(depth=4, width=16)
+        self.collect_trainable_param()
+
+
+    def setup_embedding_layers(self, xi):
+
+        # xi is np array
+        # D(xi) are features from D
+        self.xi = xi
+        in_features = xi.shape[0]
+
+        self.param_embeddings = nn.ModuleDict({'D': nn.Linear(in_features, self.width, bias=True)})
+        # set requires_grad to False
+        for embedding_weights in self.param_embeddings.parameters():
+            embedding_weights.requires_grad = False
+
+
+    def embedding(self, x):
+        # override the embedding function
+        
+        # fourier feature embedding        
+        if self.fourier:
+            x = torch.sin(2 * torch.pi * self.fflayer(x))
+        x = self.input_layer(x)
+
+        # have to evaluate self.func_param(xcoord) inside the network
+        # otherwise self.func_param is not in the computation graph
+        # assert self.with_func is True, "with_func=True to use HeatDenseNet"
+        # assert params_dict is None, "have to eval f(x) inside the network"
+        
+        if self.with_param:
+            # evaluted func_param at xcoord, then do embedding
+            # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
+            for name in self.params_dict.keys():
+                
+                param_vector = self.func_param(self.xi)
+                param_vector = param_vector.view(1,-1) #convert to row vector
+                self.params_expand[name] = param_vector.expand(x.shape[0], -1)
+                param_embedding = self.param_embeddings[name](self.params_expand[name])
+                x += param_embedding
+    
+        else:
+            for name in self.params_dict.keys():
+                self.params_expand[name] =  self.func_param(self.xi)
+        return x
+    
+    def forward(self, x):
+        
+        X = self.embedding(x)
+        Xtmp = self.act(X)
+        
+        for i, hidden_layer in enumerate(self.hidden_layers):
+            hidden_output = hidden_layer(Xtmp)
+            if self.use_resnet:
+                hidden_output += Xtmp  # ResNet connection
+            hidden_output = self.act(hidden_output)
+            Xtmp = hidden_output
+        
+        u = self.output_layer(Xtmp)
+        u = self.output_transform(x, u)
+        return u
+    
+
+
 class PoiVarProblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
@@ -18,7 +91,7 @@ class PoiVarProblem(BaseProblem):
         self.output_dim = 1
         self.opts=kwargs
 
-        self.param = {'D': kwargs['exact_param']}
+        self.param = {'D': kwargs['D']}
         self.testcase = kwargs['testcase']
 
         self.lambda_transform = lambda x, u: u * x * (1.0 - x)
@@ -80,8 +153,8 @@ class PoiVarProblem(BaseProblem):
         
         x.requires_grad_(True)
         
-        u = nn(x, None)
-        D = nn.params_expand['D']
+        u = nn(x)
+        D = nn.func_param(x)
         u_x = torch.autograd.grad(u, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         u_xx = torch.autograd.grad(u_x * D, x,
@@ -91,12 +164,41 @@ class PoiVarProblem(BaseProblem):
 
         return res, u
 
+    def setup_network(self, **kwargs):
+        '''setup network, get network structure if restore'''
+        kwargs['input_dim'] = self.input_dim
+        kwargs['output_dim'] = self.output_dim
+
+        pde_param = self.param.copy()
+        init_param = self.opts['init_param']
+        if init_param is not None:
+            pde_param.update(init_param)
+
+        net = PoiDenseNet(**kwargs,
+                        lambda_transform=self.lambda_transform,
+                        params_dict= self.param,
+                        trainable_param = self.opts['trainable_param'])
+        net.setup_embedding_layers(self.dataset['xi'])
+        return net
+
     def print_info(self):
         # print info of pde
         # print all parameters
         print('Parameters:')
         for k,v in self.param.items():
             print(f'{k} = {v}')
+
+    def get_res_pred(self, net):
+        ''' get residual and prediction'''
+        res, pred = self.residual(net, self.dataset['x_res_train'])
+        return res, pred
+    
+    def get_data_loss(self, net):
+        # get data loss
+        u_pred = net(self.dataset['x_dat_train'])
+        loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
+        
+        return loss
 
     def create_dataset_from_pde(self, dsopt):
         # create dataset from pde using datset option and noise option
@@ -112,6 +214,10 @@ class PoiVarProblem(BaseProblem):
 
         # data col-pt, for initialization use init_param, for training use exact_param
         dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
+
+        # collocation point for emebdding of D
+        dataset['xi'] = torch.linspace(0, 1, dsopt['Nxi']).view(-1, 1)
+        # dataset['xi'] = dataset['x_res_train']
 
         dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'])
 
@@ -139,31 +245,30 @@ class PoiVarProblem(BaseProblem):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
             
-            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'], None)
+            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'])
             coef = net.func_param(self.dataset['x_res_test'])
             self.dataset['func_res_test'] = coef
 
 
-            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'], None)
+            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'])
             coef = net.func_param(self.dataset['x_dat_test'])
             self.dataset['func_dat_test'] = coef
         
         # make prediction with different parameters
-        self.prediction_variation(net)
+        # self.prediction_variation(net)
 
-    def prediction_variation(self, net):
-        # make prediction with different parameters
-        x_test = self.dataset['x_dat_test']
-        deltas = [0.0, 0.1, -0.1]
+    # def prediction_variation(self, net):
+    #     # make prediction with different parameters
+    #     x_test = self.dataset['x_dat_test']
+    #     deltas = [0.0, 0.1, -0.1]
 
-        for delta in deltas:
-            # replace parameter
-            with torch.no_grad():
+    #     for delta in deltas:
+    #         # replace parameter
+    #         with torch.no_grad():
+    #             u_test = net(x_test, None)
                 
-                u_test = net(x_test, None)
-                
-            key = f'upred_del{delta}_dat_test'
-            self.dataset[key] = u_test
+    #         key = f'upred_del{delta}_dat_test'
+    #         self.dataset[key] = u_test
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
@@ -202,26 +307,6 @@ class PoiVarProblem(BaseProblem):
         '''visualize the problem'''
         self.plot_upred(savedir)
         self.plot_Dpred(savedir)
-        
-        
-        # plot prediction variation
-        # x = self.dataset['x_dat_test']
-        # for delta in [0.0, 0.1, -0.1]:
-        #     key = f'upred_del{delta}_dat_test'
-        #     plt.plot(x, self.dataset[key], label=f'Delta {delta}')
-        
-        # plt.xlim(0, 1) # fix
-        # plt.grid()
-        # plt.legend()
-
-        # if savedir is not None:
-        #     path = os.path.join(savedir, 'fig_prediction_variation.png')
-        #     plt.savefig(path, dpi=300, bbox_inches='tight')
-        #     print(f'fig saved to {path}')
-
-                
-        
-        
 
 
 if __name__ == "__main__":
@@ -242,11 +327,11 @@ if __name__ == "__main__":
     print(optobj.opts)
 
     prob = PoiVarProblem(**optobj.opts['pde_opts'])
-    pdenet = prob.setup_network(**optobj.opts['nn_opts'])
     prob.create_dataset_from_pde(optobj.opts['dataset_opts'])
+    pdenet = prob.setup_network(**optobj.opts['nn_opts'])
 
 
     prob.make_prediction(pdenet)
-    prob.visualize(save_dir=optobj.opts['logger_opts']['save_dir'])
+    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
 
 
