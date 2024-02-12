@@ -33,6 +33,7 @@ default_opts = {
         'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
         # for heat problem
         'D': 0.1,
+        'use_exact_u0':False,
     },
     'gbm_opts': {
         'whichdata': 'uchar_res', # uchar_res, ugt_dat etc

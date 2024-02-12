@@ -20,60 +20,75 @@ class HeatDenseNet(DenseNet):
         
         # override the embedding function, also enforce dirichlet boundary condition
         self.func_param = ParamFunction(depth=4, width=32, output_transform=lambda x, u: u * x * (1.0 - x))
-        
+        self.use_exact_u0 = False
         self.collect_trainable_param()
 
+    def setup_embedding_layers(self, in_features):
 
-    def embedding(self, x, params_dict=None):
+        self.param_embeddings = nn.ModuleDict({'u0': nn.Linear(in_features, self.width, bias=True)})
+
+        # set requires_grad to False
+        for embedding_weights in self.param_embeddings.parameters():
+            embedding_weights.requires_grad = False
+
+
+    def embedding(self, x, x_i):
         # override the embedding function
         # x: (batch, 2), second dimension is the x coordinate
         # fourier feature embedding
-        xcoord  = x[:, 1:2]
+        
         if self.fourier:
             x = torch.sin(2 * torch.pi * self.fflayer(x))
         x = self.input_layer(x)
 
         # have to evaluate self.func_param(xcoord) inside the network
         # otherwise self.func_param is not in the computation graph
-        assert self.with_func is True, "with_func=True to use HeatDenseNet"
-        assert params_dict is None, "have to eval f(x) inside the network"
+        # assert self.with_func is True, "with_func=True to use HeatDenseNet"
+        # assert params_dict is None, "have to eval f(x) inside the network"
         
-        if self.with_param :
-            # go through each parameter and do embedding
-            if self.with_func is False:
-                for name, param in params_dict.items():
-                        # expand the parameter to the same size as x
-                        self.params_expand[name] = param.expand(x.shape[0], -1)
-                        scalar_param_expanded = self.params_expand[name] # (batch, 1)
-                        param_embedding = self.param_embeddings[name](scalar_param_expanded)
-                        x += param_embedding
-            else:
-                # evaluted func_param at xcoord, then do embedding
-                # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
-                for name in self.params_dict.keys():
-                    param_vector = self.func_param(xcoord)
-                    self.params_expand[name] = param_vector
-                    param_embedding = self.param_embeddings[name](param_vector)
-                    x += param_embedding
+        if self.with_param:
+            # evaluted func_param at xcoord, then do embedding
+            # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
+            for name in self.params_dict.keys():
+                param_vector = self.func_param(x_i)
+                param_vector = param_vector.view(1, -1)
+                self.params_expand[name] = param_vector.expand(x.shape[0], -1)
+                param_embedding = self.param_embeddings[name](self.params_expand[name])
+                x += param_embedding
     
         else:
-            if self.with_func is False:
-                # for vanilla version, no parameter embedding
-                # copy params_dict to params_expand
-                for name, param in self.params_dict.items():
-                    self.params_expand[name] = params_dict[name]
-            else:
-                for name in self.params_dict.keys():
-                    self.params_expand[name] =  self.func_param(xcoord)
+            for name in self.params_dict.keys():
+                self.params_expand[name] =  self.func_param(x_i)
         return x
+    
+    def forward(self, x, x_i):
+        
+        X = self.embedding(x, x_i)
+        Xtmp = self.act(X)
+        
+        for i, hidden_layer in enumerate(self.hidden_layers):
+            hidden_output = hidden_layer(Xtmp)
+            if self.use_resnet:
+                hidden_output += Xtmp  # ResNet connection
+            hidden_output = self.act(hidden_output)
+            Xtmp = hidden_output
+        
+        u = self.output_layer(Xtmp)
+        u = self.output_transform(x, u)
+        return u
     
     def output_transform(self, x, u):
         # override the output transform attribute of DenseNet
-        u0 = self.func_param(x[:, 1:2])
+        if self.use_exact_u0 is True:
+            # only for testcase 0
+            u0 = torch.sin(torch.pi  * x[:, 1:2])
+        else:
+            u0 = self.func_param(x[:, 1:2])
+
         return u * x[:, 1:2] * (1 - x[:, 1:2]) * x[:, 0:1] + u0
 
 
-            
+  
 class HeatProblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
@@ -83,27 +98,13 @@ class HeatProblem(BaseProblem):
  
         self.testcase = kwargs['testcase']
         self.D = kwargs['D']
+        self.use_exact_u0 = kwargs['use_exact_u0']
         self.use_res = kwargs['use_res']
 
         # placeholder for parameter, only name is used
         self.param = {'u0': 0.0}
 
-        # do not pass transformation to network
-        # make transformation in residual loss and data loss
-        self.lambda_transform = lambda x, u: u
-
         self.dataset = None
-    
-    def no_grad_evaluate(self, nn, X):
-        '''evaluate the network without gradient'''
-        with torch.no_grad():
-            t = X[:, 0:1]
-            x = X[:, 1:2]
-
-            nn_out = nn(X, None)
-            u0 = nn.params_expand['u0']
-            u = nn_out * x * (1 - x) * t + u0
-        return u, u0
 
     def u_exact(self, t, x):
         if self.testcase == 0:
@@ -132,9 +133,10 @@ class HeatProblem(BaseProblem):
         else:
             raise ValueError('Invalid testcase')
     
-    def residual(self, nn, X_in):
+    def residual(self, nn, X_in, x_ic):
         
         X_in.requires_grad = True
+        x_ic.requires_grad = True
         
         t = X_in[:, 0:1]
         x = X_in[:, 1:2]
@@ -142,7 +144,7 @@ class HeatProblem(BaseProblem):
         # Concatenate sliced tensors to form the input for the network
         X = torch.cat((t,x), dim=1)
 
-        nn_out = nn(X, None)
+        nn_out = nn(X, x_ic)
         u = nn_out * x * (1 - x) * t + nn.params_expand['u0']
         
         u_t = torch.autograd.grad(u, t,
@@ -158,16 +160,16 @@ class HeatProblem(BaseProblem):
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
-        res, pred = self.residual(net, self.dataset['X_res'])
+        res, pred = self.residual(net, self.dataset['X_res'], self.dataset['x_ic'])
         return res, pred
     
     def get_data_loss(self, net):
         # get data loss
         if self.use_res:
-            u_pred = net(self.dataset['X_res'],None)
+            u_pred = net(self.dataset['X_res'],self.dataset['x_ic'])
             loss = torch.mean(torch.square(u_pred - self.dataset['u_res']))
         else:
-            u_pred = net(self.dataset['X_dat'],None)
+            u_pred = net(self.dataset['X_dat'],self.dataset['x_ic'])
             loss = torch.mean(torch.square(u_pred - self.dataset['u_dat']))
         
         return loss
@@ -183,9 +185,10 @@ class HeatProblem(BaseProblem):
             pde_param.update(init_param)
 
         net = HeatDenseNet(**kwargs,
-                            lambda_transform=self.lambda_transform,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])
+        net.setup_embedding_layers(self.dataset['Nx'])
+        net.use_exact_u0 = True if self.use_exact_u0 else False
         return net
 
     def print_info(self):
@@ -245,8 +248,8 @@ class HeatProblem(BaseProblem):
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
-            self.dataset['upred_res'] = net(self.dataset['X_res'], None)
-            self.dataset['upred_dat'] = net(self.dataset['X_dat'], None)
+            self.dataset['upred_res'] = net(self.dataset['X_res'], self.dataset['x_ic'])
+            self.dataset['upred_dat'] = net(self.dataset['X_dat'], self.dataset['x_ic'])
             self.dataset['u0_pred_ic'] = net.func_param(self.dataset['x_ic'])
         
 

@@ -21,8 +21,6 @@ class PoiVarProblem(BaseProblem):
         self.param = {'D': kwargs['exact_param']}
         self.testcase = kwargs['testcase']
 
-
-        
         self.lambda_transform = lambda x, u: u * x * (1.0 - x)
 
         self.dataset = None
@@ -81,7 +79,6 @@ class PoiVarProblem(BaseProblem):
     def residual(self, nn, x):
         
         x.requires_grad_(True)
-        
         
         u = nn(x, None)
         D = nn.params_expand['D']
