@@ -24,14 +24,14 @@ class PoiDenseNet(DenseNet):
         self.collect_trainable_param()
 
 
-    def setup_embedding_layers(self, xi):
+    def setup_embedding_layers(self):
 
         # xi is np array
         # D(xi) are features from D
-        self.xi = xi
-        in_features = xi.shape[0]
+        # self.xi = xi
+        # in_features = xi.shape[0]
 
-        self.param_embeddings = nn.ModuleDict({'D': nn.Linear(in_features, self.width, bias=True)})
+        self.param_embeddings = nn.ModuleDict({'D': nn.Linear(1, self.width, bias=True)})
         # set requires_grad to False
         for embedding_weights in self.param_embeddings.parameters():
             embedding_weights.requires_grad = False
@@ -40,10 +40,11 @@ class PoiDenseNet(DenseNet):
     def embedding(self, x):
         # override the embedding function
         
+        xcoord = x
         # fourier feature embedding        
         if self.fourier:
-            x = torch.sin(2 * torch.pi * self.fflayer(x))
-        x = self.input_layer(x)
+            x_embed = torch.sin(2 * torch.pi * self.fflayer(x))
+        x_embed = self.input_layer(x)
 
         # have to evaluate self.func_param(xcoord) inside the network
         # otherwise self.func_param is not in the computation graph
@@ -55,16 +56,20 @@ class PoiDenseNet(DenseNet):
             # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
             for name in self.params_dict.keys():
                 
-                param_vector = self.func_param(self.xi)
-                param_vector = param_vector.view(1,-1) #convert to row vector
-                self.params_expand[name] = param_vector.expand(x.shape[0], -1)
+                param_vector = self.func_param(xcoord)
+
+                # commented out, for using xi as collocation point
+                # param_vector = param_vector.view(1,-1) #convert to row vector
+                # self.params_expand[name] = param_vector.expand(x.shape[0], -1)
+                
+                self.params_expand[name] = param_vector
                 param_embedding = self.param_embeddings[name](self.params_expand[name])
-                x += param_embedding
+                x_embed += param_embedding
     
         else:
             for name in self.params_dict.keys():
-                self.params_expand[name] =  self.func_param(self.xi)
-        return x
+                self.params_expand[name] =  self.func_param(xcoord)
+        return x_embed
     
     def forward(self, x):
         
@@ -154,7 +159,7 @@ class PoiVarProblem(BaseProblem):
         x.requires_grad_(True)
         
         u = nn(x)
-        D = nn.func_param(x)
+        D = nn.params_expand['D']
         u_x = torch.autograd.grad(u, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         u_xx = torch.autograd.grad(u_x * D, x,
@@ -178,7 +183,7 @@ class PoiVarProblem(BaseProblem):
                         lambda_transform=self.lambda_transform,
                         params_dict= self.param,
                         trainable_param = self.opts['trainable_param'])
-        net.setup_embedding_layers(self.dataset['xi'])
+        net.setup_embedding_layers()
         return net
 
     def print_info(self):
@@ -216,7 +221,7 @@ class PoiVarProblem(BaseProblem):
         dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
 
         # collocation point for emebdding of D
-        dataset['xi'] = torch.linspace(0, 1, dsopt['Nxi']).view(-1, 1)
+        # dataset['xi'] = torch.linspace(0, 1, dsopt['Nxi']).view(-1, 1)
         # dataset['xi'] = dataset['x_res_train']
 
         dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'])
