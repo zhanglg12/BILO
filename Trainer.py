@@ -56,7 +56,6 @@ class Trainer:
         '''
         set gradient of loss w.r.t pde parameter
         '''
-        # import pdb; pdb.set_trace()
         params = self.net.param_pde_trainable
         grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=False)
         for param, grad in zip(params, grads):
@@ -419,6 +418,9 @@ class Trainer:
     def restore_optimizer(self, dirname):
         # restore optimizer, need dirname
         traintype = self.traintype
+        if self.opts['reset_optim']:
+            print('do not restore optimizer, reset optimizer to default')
+            return
 
         for key in self.optimizer.keys():
             fname = f"optimizer_{key}.pth"

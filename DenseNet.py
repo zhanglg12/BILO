@@ -284,27 +284,38 @@ class ParamFunction(nn.Module):
             activation = nn.ReLU
         elif activation == 'sigmoid':
             activation = nn.Sigmoid
+        elif activation == 'id':
+            activation = nn.Identity
         else:
             raise ValueError('activation function not supported')
 
         if output_activation == 'softplus':
             output_activation = nn.Softplus
+        elif output_activation == 'id':
+            output_activation = nn.Identity
         else:
             raise ValueError('output activation function not supported')
 
 
         # Create the layers of the neural network
         layers = []
-        # input layer
-        layers.append(nn.Linear(input_dim, width))
-        layers.append(activation())
-        # hidden layers
-        for _ in range(depth - 2):
-            layers.append(nn.Linear(width, width))
+        if depth == 1:
+            # Only one layer followed by output_activation if depth is 1
+            layers.append(nn.Linear(input_dim, output_dim))
+            layers.append(output_activation())
+        else:
+            # input layer
+            layers.append(nn.Linear(input_dim, width))
             layers.append(activation())
-        # output layer
-        layers.append(nn.Linear(width, output_dim))
-        layers.append(output_activation())
+
+            # hidden layers (depth - 2 because we already have input and output layers)
+            for _ in range(depth - 2):
+                layers.append(nn.Linear(width, width))
+                layers.append(activation())
+
+            # output layer
+            layers.append(nn.Linear(width, output_dim))
+            layers.append(output_activation())
 
         # Store the layers as a sequential module
         self.layers = nn.Sequential(*layers)

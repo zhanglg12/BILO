@@ -82,6 +82,7 @@ default_opts = {
         'net_data':False, # use data loss for network weights
         'loss_net':'res,fullresgrad,bc', # loss for network weights
         'loss_pde':'data', # loss for pde parameter
+        'reset_optim':False, # reset optimizer state
     },
     'noise_opts':{
         'use_noise': False,
