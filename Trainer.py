@@ -11,15 +11,16 @@ from Logger import Logger
 from util import get_mem_stats, set_device, set_seed, print_dict, flatten
 
 class Trainer:
-    def __init__(self, opts, net, pde, lossCollection, logger:Logger):
+    def __init__(self, opts, net, pde, device, lossCollection, logger:Logger):
         self.opts = opts
         self.logger = logger
         self.net = net
         self.pde = pde
+        self.device = device
         self.info = {}
 
         self.lossCollection = lossCollection
-        self.device = set_device()
+        
         self.optimizer = {}
 
         # early stopping
