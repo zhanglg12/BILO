@@ -80,7 +80,7 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
         'net_data':False, # use data loss for network weights
-        'loss_net':'res,fullresgrad,bc', # loss for network weights
+        'loss_net':'res,fullresgrad,bc,resgradfunc', # loss for network weights
         'loss_pde':'data', # loss for pde parameter
         'reset_optim':False, # reset optimizer state
     },
@@ -93,6 +93,7 @@ default_opts = {
         'res': 1.0,
         'resgrad': None,
         'fullresgrad': 0.001,
+        'resgradfunc': 0.001,
         'data': 1.0,
         'paramgrad': None,
         'bc':None,

@@ -29,7 +29,8 @@ class lossCollection:
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss, 'resgrad': self.resgradloss, 
         'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
-        'bc': self.bcloss,'funcloss':self.funcloss}
+        'bc': self.bcloss,'funcloss':self.funcloss,
+        'resgradfunc': self.resgradfuncloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -144,6 +145,27 @@ class lossCollection:
                 resgradmse += torch.sum(torch.pow(tmp, 2))
         return resgradmse/n
 
+    def resgradfuncloss(self):
+        # compute gradient of residual w.r.t. parameter on every residual point.
+        # very memory intensive
+        # assume output dim is 1
+
+        n = self.res.shape[0]
+        if self.idmx is None:
+            self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
+
+        resgradmse = 0.0
+        self.res_unbind = torch.flatten(self.res)
+        
+        tmp = torch.autograd.grad(self.res_unbind, self.net.param_pde_trainable, grad_outputs=self.idmx,
+            create_graph=True, retain_graph=True,allow_unused=True, is_grads_batched=True)
+
+        # mse
+        for p in tmp:
+            resgradmse += torch.sum(torch.pow(p, 2))
+        
+        return resgradmse/n
+
     def fullresgradloss(self):
         # compute gradient of residual w.r.t. parameter on every residual point.
         # very memory intensive
@@ -158,6 +180,11 @@ class lossCollection:
             for j in range(self.pde.output_dim):
                 tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_expand[pname], grad_outputs=torch.ones_like(self.res_unbind[j]),
                 create_graph=True, retain_graph=True,allow_unused=True)[0]
+
+
+                # tmp3 = torch.autograd.grad(self.res_unbind[j], self.net.param_pde_trainable, grad_outputs=self.idmx,
+                # create_graph=True, retain_graph=True,allow_unused=True, is_grads_batched=True)[0]
+                
                 # for debugging, should be same as tmp
                 # tmp2 = torch.autograd.grad(self.res_unbind[j], self.net.params_dict[pname], grad_outputs=self.idmx,
                 # create_graph=True, retain_graph=True,allow_unused=True,  is_grads_batched=True)[0]

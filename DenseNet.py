@@ -293,6 +293,8 @@ class ParamFunction(nn.Module):
             output_activation = nn.Softplus
         elif output_activation == 'id':
             output_activation = nn.Identity
+        elif output_activation == 'relu':
+            output_activation = nn.ReLU
         else:
             raise ValueError('output activation function not supported')
 

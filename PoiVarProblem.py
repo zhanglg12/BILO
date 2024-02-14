@@ -20,15 +20,14 @@ class PoiDenseNet(DenseNet):
         super().__init__(**kwargs)
         
         # override the embedding function, also enforce dirichlet boundary condition
-        self.func_param = ParamFunction(depth=4, width=16)
+        # self.func_param = ParamFunction(depth=2, width=4,output_activation='relu')
 
-        # self.func_param = ParamFunction(depth=1, width=1, 
-        # activation='id',output_activation='id')
+        self.func_param = ParamFunction(depth=1, width=1, 
+        activation='id',output_activation='softplus')
 
         self.collect_trainable_param()
         self.D_eval = None
         
-
 
     def setup_embedding_layers(self):
 
@@ -74,8 +73,7 @@ class PoiDenseNet(DenseNet):
                 param_vector = self.func_param(x)
                 self.D_eval = param_vector
                 flat_parameters = torch.cat([p.view(-1) for p in self.param_pde_trainable])
-                self.params_expand[name] = flat_parameters.expand(x.shape[0], -1)
-                param_embedding = self.param_embeddings[name](self.params_expand[name])
+                param_embedding = self.param_embeddings[name](flat_parameters)
 
                 x_embed += param_embedding
     
@@ -175,15 +173,16 @@ class PoiVarProblem(BaseProblem):
         x.requires_grad_(True)
         
         u = nn(x)
-        # D = nn.params_expand['D']
-        # D = nn.func_param(x)
+
         D = nn.D_eval
         u_x = torch.autograd.grad(u, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
-        u_xx = torch.autograd.grad(u_x * D, x,
+        u_xx = torch.autograd.grad(D*u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
         
+        
         res = u_xx - self.f(x)
+        
         
         # import pdb; pdb.set_trace()
         # test1 = torch.autograd.grad(D, x,
