@@ -179,17 +179,9 @@ class PoiVarProblem(BaseProblem):
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         u_xx = torch.autograd.grad(D*u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        
-        
+                    
         res = u_xx - self.f(x)
         
-        
-        # import pdb; pdb.set_trace()
-        # test1 = torch.autograd.grad(D, x,
-        #     create_graph=False, retain_graph=False, grad_outputs=torch.ones_like(D))[0]
-        # test2 = torch.autograd.grad(res, nn.params_expand['D'],
-        #     create_graph=False, retain_graph=False, grad_outputs=torch.ones_like(res))[0]
-
         return res, u
 
     def setup_network(self, **kwargs):

@@ -91,7 +91,6 @@ default_opts = {
     },
     'weights': {
         'res': 1.0,
-        'resgrad': None,
         'fullresgrad': 0.001,
         'resgradfunc': 0.001,
         'data': 1.0,
@@ -354,6 +353,9 @@ class Options:
             self.opts['pde_opts'].update(self.opts['gbm_opts'])
             del self.opts['gbm_opts']
         
+        # check assumptions
+        # fullresgrad and resgradfunc can not both positive
+        assert not (self.opts['weights']['fullresgrad'] is not None and self.opts['weights']['resgradfunc'] is not None), 'fullresgrad and resgradfunc can not both positive'
 
 
 if __name__ == "__main__":
