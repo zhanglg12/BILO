@@ -106,14 +106,14 @@ class DataSet(dict):
                 # print(f'skip {key}')
                 pass
     
-    def uniform_downsample(self, n, vars):
+    def subsample_evenly_astrain(self, n, vars):
         '''uniformly downsample data set in the first dimension
         n is final number of samples
         '''
         N = self[vars[0]].shape[0]
-        step = N//n
+        step = (N-1)//(n-1)
         for var in vars:
-            self[var] = self[var][::step]
+            self[var+'_train'] = self[var][::step]
     
     def filter(self, substr):
         ''' return list of key that contains substr

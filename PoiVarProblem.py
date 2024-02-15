@@ -16,7 +16,7 @@ from DenseNet import DenseNet, ParamFunction
 
 from torchreparam import ReparamModule
 
-glob_test = False
+GLOBTEST = False
 
 class PoiDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
@@ -25,7 +25,7 @@ class PoiDenseNet(DenseNet):
         
         # override the embedding function, also enforce dirichlet boundary condition
         
-        if glob_test:
+        if GLOBTEST:
             self.func_param = ParamFunction(depth=1, width=1, 
             activation='id',output_activation='id')
             # set bias = 1, weight = 0
@@ -48,7 +48,7 @@ class PoiDenseNet(DenseNet):
 
         self.param_embeddings = nn.ModuleDict({'D': nn.Linear(1, self.width, bias=False)})
 
-        if glob_test:
+        if GLOBTEST:
             # set weight = 1, identity 
             self.param_embeddings['D'].weight.data.fill_(1.0)
             
@@ -84,6 +84,7 @@ class PoiDenseNet(DenseNet):
         else:
             # if u(x), not function of unkown
             self.params_expand['D'] =self.func_param(x)
+            self.D_eval = self.params_expand['D']
 
         return x_embed
 
@@ -130,6 +131,9 @@ class PoiVarProblem(BaseProblem):
 
         self.dataset = None
 
+        if kwargs['datafile']:
+            self.dataset = DataSet(kwargs['datafile'])
+
     def u_exact(self, x):
         if self.testcase == 0:
             # different D
@@ -166,7 +170,7 @@ class PoiVarProblem(BaseProblem):
         else:
             raise ValueError('Invalid testcase')
     
-    def f(self, x):
+    def f_exact(self, x):
         if self.testcase == 0:
             return -(torch.pi )**2 * torch.sin(torch.pi * x)
         elif self.testcase == 1:
@@ -195,13 +199,11 @@ class PoiVarProblem(BaseProblem):
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         u_xx = torch.autograd.grad(D*u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = u_xx - self.f(x)
+        res = u_xx - self.dataset['f_res_train']
         
-        if glob_test:
+        if GLOBTEST:
             res = D + u
                     
-        
-        
         return res, u
 
     def setup_network(self, **kwargs):
@@ -218,7 +220,7 @@ class PoiVarProblem(BaseProblem):
                         lambda_transform=self.lambda_transform,
                         params_dict= self.param,
                         trainable_param = self.opts['trainable_param'])
-        net.setup_embedding_layers(self.dataset['xi'].shape[0])
+        net.setup_embedding_layers()
         return net
 
     def print_info(self):
@@ -236,41 +238,58 @@ class PoiVarProblem(BaseProblem):
     def get_data_loss(self, net):
         # get data loss
         u_pred = net(self.dataset['x_dat_train'])
-        loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
-        
+        loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))        
         return loss
+    
 
     def create_dataset_from_pde(self, dsopt):
         # create dataset from pde using datset option and noise option
+        assert self.dataset is None, 'datafile not provide, dataset should be None'
         dataset = DataSet()
 
         # residual col-pt (collocation point), no need for u
-        dataset['x_res_train'] = torch.linspace(0, 1, dsopt['N_res_train'] ).view(-1, 1)
-        dataset['x_res_test'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1)
+        dataset['x_res'] = torch.linspace(0, 1, dsopt['N_res_test']).view(-1, 1)
 
         # data col-pt, for testing, use exact param
-        dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
-        dataset['u_dat_test'] = self.u_exact(dataset['x_dat_test'])
-
-        # data col-pt, for initialization use init_param, for training use exact_param
-        dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
-
-        # collocation point for emebdding of D
-        dataset['xi'] = dataset['x_res_train']
-
-        dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'])
+        dataset['x_dat'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
+        dataset['u_dat'] = self.u_exact(dataset['x_dat'])
 
         # D(x) at collocation point
-        dataset['D_dat_train'] = self.D_exact(dataset['x_dat_train'])
-        dataset['D_res_train'] = self.D_exact(dataset['x_res_train'])
-        dataset['D_dat_test'] = self.D_exact(dataset['x_dat_test'])
+        dataset['D_res'] = self.D_exact(dataset['x_res'])
+        dataset['f_res'] = self.f_exact(dataset['x_res'])
+        dataset['D_dat'] = self.D_exact(dataset['x_dat'])
+
+
+        dataset.subsample_evenly_astrain(dsopt['N_res_train'], ['x_res', 'D_res', 'f_res'])
+        dataset.subsample_evenly_astrain(dsopt['N_dat_train'], ['x_dat', 'u_dat', 'D_dat'])
 
         self.dataset = dataset
+    
+    def create_dataset_from_file(self, dsopt):
+        '''create dataset from file'''
+        assert self.dataset is not None, 'datafile provide, dataset should not be None'
+        uname = f'u{self.testcase}'
+        dname = f'd{self.testcase}'
 
+    
+        self.dataset['x_dat'] = self.dataset['x']
+        self.dataset['u_dat'] = self.dataset[uname]
+        self.dataset['D_dat'] = self.dataset[dname]
+
+        self.dataset['x_res'] = self.dataset['x']
+        self.dataset['f_res'] = self.dataset['f']
+        self.dataset['D_res'] = self.dataset[dname]
+        
+        self.dataset.subsample_evenly_astrain(dsopt['N_res_train'], ['x_res', 'D_res', 'f_res'])
+        self.dataset.subsample_evenly_astrain(dsopt['N_dat_train'], ['x_dat', 'u_dat', 'D_dat'])
 
     def setup_dataset(self, dsopt, noise_opt):
         '''add noise to dataset'''
-        self.create_dataset_from_pde(dsopt)
+        if self.dataset is None:
+            self.create_dataset_from_pde(dsopt)
+        else:
+            self.create_dataset_from_file(dsopt)
+
         if noise_opt['use_noise']:
             add_noise(self.dataset, noise_opt)
     
@@ -283,35 +302,35 @@ class PoiVarProblem(BaseProblem):
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
-            self.dataset['upred_res_test'] = net(self.dataset['x_res_test'])
-            coef = net.func_param(self.dataset['x_res_test'])
-            self.dataset['func_res_test'] = coef
+            self.dataset['upred_res'] = net(self.dataset['x_res'])
+            coef = net.func_param(self.dataset['x_res'])
+            self.dataset['func_res'] = coef
 
 
-            self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'])
-            coef = net.func_param(self.dataset['x_dat_test'])
-            self.dataset['func_dat_test'] = coef
+            self.dataset['upred_dat'] = net(self.dataset['x_dat'])
+            coef = net.func_param(self.dataset['x_dat'])
+            self.dataset['func_dat'] = coef
         
         # make prediction with different parameters
         # self.prediction_variation(net)
 
     # def prediction_variation(self, net):
     #     # make prediction with different parameters
-    #     x_test = self.dataset['x_dat_test']
+    #     x = self.dataset['x_dat']
     #     deltas = [0.0, 0.1, -0.1]
 
     #     for delta in deltas:
     #         # replace parameter
     #         with torch.no_grad():
-    #             u_test = net(x_test, None)
+    #             u = net(x, None)
                 
-    #         key = f'upred_del{delta}_dat_test'
-    #         self.dataset[key] = u_test
+    #         key = f'upred_del{delta}_dat'
+    #         self.dataset[key] = u
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
-        x  = self.dataset['x_dat_test']
-        D = self.D_exact(x)
+        x  = self.dataset['x_dat']
+        D = self.dataset['D_dat']
         with torch.no_grad():
             Dpred = nn.func_param(x)
             l2norm = torch.mean(torch.square(D - Dpred))
@@ -321,8 +340,8 @@ class PoiVarProblem(BaseProblem):
 
     def plot_upred(self, savedir=None):
         fig, ax = plt.subplots()
-        ax.plot(self.dataset['x_dat_test'], self.dataset['u_dat_test'], label='Exact')
-        ax.plot(self.dataset['x_dat_test'], self.dataset['upred_dat_test'], label='NN')
+        ax.plot(self.dataset['x_dat'], self.dataset['u_dat'], label='Exact')
+        ax.plot(self.dataset['x_dat'], self.dataset['upred_dat'], label='NN')
         ax.scatter(self.dataset['x_dat_train'], self.dataset['u_dat_train'], label='data')
         ax.legend(loc="best")
         if savedir is not None:
@@ -333,8 +352,8 @@ class PoiVarProblem(BaseProblem):
     def plot_Dpred(self, savedir=None):
         ''' plot predicted d and exact d'''
         fig, ax = plt.subplots()
-        ax.plot(self.dataset['x_dat_test'], self.dataset['D_dat_test'], label='Exact')
-        ax.plot(self.dataset['x_dat_test'], self.dataset['func_dat_test'], label='NN')
+        ax.plot(self.dataset['x_dat'], self.dataset['D_dat'], label='Exact')
+        ax.plot(self.dataset['x_dat'], self.dataset['func_dat'], label='NN')
         ax.legend(loc="best")
         if savedir is not None:
             path = os.path.join(savedir, 'fig_D_pred.png')
@@ -365,7 +384,7 @@ if __name__ == "__main__":
     print(optobj.opts)
 
     prob = PoiVarProblem(**optobj.opts['pde_opts'])
-    prob.create_dataset_from_pde(optobj.opts['dataset_opts'])
+    prob.setup_dataset(optobj.opts['dataset_opts'],optobj.opts['noise_opts'])
     pdenet = prob.setup_network(**optobj.opts['nn_opts'])
 
 
