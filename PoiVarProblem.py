@@ -46,7 +46,7 @@ class PoiDenseNet(DenseNet):
 
     def setup_embedding_layers(self, in_features=None):
 
-        self.param_embeddings = nn.ModuleDict({'D': nn.Linear(in_features, self.width, bias=False)})
+        self.param_embeddings = nn.ModuleDict({'D': nn.Linear(1, self.width, bias=False)})
 
         if glob_test:
             # set weight = 1, identity 
@@ -74,23 +74,11 @@ class PoiDenseNet(DenseNet):
         # self.D_eval = self.func_param(x)
 
         if self.with_param:
-            if self.xi == None:
-                self.xi = x.detach()
-
             
-            # embed all of D(xi), taken as variables of u(x, y1, .. yn), so detach from x
-            param_vector = self.func_param(self.xi) #(n, 1) D at x_res_train
-            param_vector = param_vector.view(1,-1) #convert to row vector
-            self.params_expand['D'] = param_vector.expand(x.shape[0], -1) # duplicate n row, n-by-n matrix
-
-            # collect diagonal of D to column vector, should be D(x) at x_res_train
-            # connected to self.params_expand['D']
-            diagonal = torch.diag(self.params_expand['D'])
-            column_vector = diagonal.unsqueeze(1)
-            self.D_eval = column_vector
-
-            y_embed = self.param_embeddings['D'](self.params_expand['D'])
-
+            param_vector = self.func_param(x) #(n, 1) D at x_res_train
+            self.D_eval = param_vector
+            self.params_expand['D'] = self.D_eval
+            y_embed = self.param_embeddings['D'](self.D_eval)
             
             x_embed += y_embed
         else:
