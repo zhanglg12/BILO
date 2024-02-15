@@ -120,7 +120,9 @@ def flatten(nested_dict):
 
 def generate_grf(x, a, l):
     """
-    Generate 1D Gaussian random field with mean 0, std a, and correlation length l.
+    If l is small, it's iid Gaussian, mean 0, variance a (std dev sqrt(a))
+    If l is large, it's a Gaussian random field with mean 0, cov a, and correlation length l.
+    
     """
     # Ensure x is a torch tensor, if not, convert it to a torch tensor
     if not isinstance(x, torch.Tensor):
@@ -138,7 +140,8 @@ def generate_grf(x, a, l):
         grf_numpy = np.random.multivariate_normal(mean=np.zeros_like(x_numpy), cov=K)
     else:
         # iid Gaussian
-        grf_numpy = np.random.normal(loc=0.0, scale=a, size=x_numpy.shape)
+        std = np.sqrt(a)
+        grf_numpy = np.random.normal(loc=0.0, scale=std, size=x_numpy.shape)
 
     # Convert grf_numpy back to a torch tensor, reshaping to match the original shape of x
     grf_torch = torch.tensor(grf_numpy, dtype=torch.float32).view(x.shape)

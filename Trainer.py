@@ -105,7 +105,7 @@ class Trainer:
             # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde, 'lr': self.opts['lr_pde']}
+                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             # all parameters
             self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)

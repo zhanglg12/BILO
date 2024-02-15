@@ -41,7 +41,7 @@ class PoiDenseNet(DenseNet):
 
         self.collect_trainable_param()
         self.D_eval = None
-        self.xi = None
+        
         
 
     def setup_embedding_layers(self, in_features=None):
@@ -71,7 +71,6 @@ class PoiDenseNet(DenseNet):
         # otherwise self.func_param is not in the computation graph
     
         x_embed = self.embed_x(x)
-        # self.D_eval = self.func_param(x)
 
         if self.with_param:
             
@@ -130,7 +129,6 @@ class PoiVarProblem(BaseProblem):
         self.lambda_transform = lambda x, u: u * x * (1.0 - x)
 
         self.dataset = None
-
         if kwargs['datafile']:
             self.dataset = DataSet(kwargs['datafile'])
 
