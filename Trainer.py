@@ -58,7 +58,7 @@ class Trainer:
         set gradient of loss w.r.t pde parameter
         '''
         params = self.net.param_pde_trainable
-        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=False)
+        grads = torch.autograd.grad(loss, params, create_graph=True, allow_unused=True)
         for param, grad in zip(params, grads):
             param.grad = grad
 

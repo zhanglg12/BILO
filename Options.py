@@ -80,7 +80,7 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
         'net_data':False, # use data loss for network weights
-        'loss_net':'res,fullresgrad,bc,resgradfunc', # loss for network weights
+        'loss_net':'res,fullresgrad,bc', # loss for network weights
         'loss_pde':'data', # loss for pde parameter
         'reset_optim':False, # reset optimizer state
     },
@@ -92,7 +92,7 @@ default_opts = {
     'weights': {
         'res': 1.0,
         'fullresgrad': 0.001,
-        'resgradfunc': 0.001,
+        'resgradfunc': None,
         'data': 1.0,
         'paramgrad': None,
         'bc':None,
@@ -233,7 +233,7 @@ class Options:
         ''' handle dependent options '''
         if self.opts['flags'] != '':
             self.opts['flags'] = self.opts['flags'].split(',')
-            assert all([flag in ['small','local','wunit','fixiter'] for flag in self.opts['flags']]), 'invalid flag'
+            assert all([flag in ['small','local','wunit','fixiter','lintest'] for flag in self.opts['flags']]), 'invalid flag'
         else:
             self.opts['flags'] = []
 
@@ -241,6 +241,13 @@ class Options:
             # use small network for testing
             self.opts['nn_opts']['depth'] = 4
             self.opts['nn_opts']['width'] = 2
+            self.opts['train_opts']['max_iter'] = 10
+            self.opts['train_opts']['print_every'] = 1
+        
+        if 'lintest' in self.opts['flags']:
+            # use small network for testing
+            self.opts['nn_opts']['depth'] = 0
+            self.opts['nn_opts']['width'] = 1
             self.opts['train_opts']['max_iter'] = 10
             self.opts['train_opts']['print_every'] = 1
             

@@ -114,7 +114,7 @@ class DenseNet(nn.Module):
         if not self.with_func:
             self.param_pde_trainable = [param for param in self.param_pde if param.requires_grad]
         else:
-            self.param_pde_trainable = list(self.func_param.parameters())
+            self.param_pde_trainable = [param for param in self.func_param.parameters() if param.requires_grad]
 
     def output_transform(self, x, u):
         '''

@@ -14,77 +14,96 @@ from DataSet import DataSet
 
 from DenseNet import DenseNet, ParamFunction
 
+from torchreparam import ReparamModule
+
+glob_test = False
+
 class PoiDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
         # override the embedding function, also enforce dirichlet boundary condition
-        # self.func_param = ParamFunction(depth=2, width=4,output_activation='relu')
+        
+        if glob_test:
+            self.func_param = ParamFunction(depth=1, width=1, 
+            activation='id',output_activation='id')
+            # set bias = 1, weight = 0
+            self.func_param.layers[0].bias.data.fill_(1.0)
+            self.func_param.layers[0].weight.data.fill_(0.0)
+            self.func_param.layers[0].weight.requires_grad = False
+            
+            # For testing, PoiDenseNet is linear
+            self.act = nn.Identity()
+            self.output_layer = nn.Identity()
 
-        self.func_param = ParamFunction(depth=1, width=1, 
-        activation='id',output_activation='softplus')
+        self.func_param = ParamFunction(depth=4, width=16)
 
         self.collect_trainable_param()
         self.D_eval = None
+        self.xi = None
         
 
-    def setup_embedding_layers(self):
-
-        in_features = sum([p.numel() for p in self.param_pde_trainable])
+    def setup_embedding_layers(self, in_features=None):
 
         self.param_embeddings = nn.ModuleDict({'D': nn.Linear(in_features, self.width, bias=False)})
+
+        if glob_test:
+            # set weight = 1, identity 
+            self.param_embeddings['D'].weight.data.fill_(1.0)
+            
         # set requires_grad to False
         for embedding_weights in self.param_embeddings.parameters():
             embedding_weights.requires_grad = False
 
-
-    def embedding(self, x):
-        # override the embedding function
-        
-        
-        # fourier feature embedding        
+    def embed_x(self, x):
+        '''embed x to the input layer'''
         if self.fourier:
             x_embed = torch.sin(2 * torch.pi * self.fflayer(x))
         x_embed = self.input_layer(x)
 
-        # have to evaluate self.func_param(xcoord) inside the network
-        # otherwise self.func_param is not in the computation graph
-        # assert self.with_func is True, "with_func=True to use HeatDenseNet"
-        # assert params_dict is None, "have to eval f(x) inside the network"
-        
-        if self.with_param:
-            # evaluted func_param at xcoord, then do embedding
-            # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
-            for name in self.params_dict.keys():
-                
-                # param_vector = self.func_param(self.xi)
-                # self.D_eval = param_vector
-
-                # Use xi for embedding
-                # param_vector = param_vector.view(1,-1) #convert to row vector
-                # self.params_expand[name] = param_vector.expand(x.shape[0], -1) #duplicate for each x
-                # param_embedding = self.param_embeddings[name](self.params_expand[name])
-
-                # Not using xi for embedding
-                # self.params_expand[name] = param_vector
-
-                # Use all weight for embedding
-                param_vector = self.func_param(x)
-                self.D_eval = param_vector
-                flat_parameters = torch.cat([p.view(-1) for p in self.param_pde_trainable])
-                param_embedding = self.param_embeddings[name](flat_parameters)
-
-                x_embed += param_embedding
-    
-        else:
-            for name in self.params_dict.keys():
-                self.params_expand[name] =  self.func_param(x)
         return x_embed
     
-    def forward(self, x):
+    def embedding(self, x):
+        # override the embedding function
         
-        X = self.embedding(x)
+        # have to evaluate self.func_param(xcoord) inside the network
+        # otherwise self.func_param is not in the computation graph
+    
+        x_embed = self.embed_x(x)
+        # self.D_eval = self.func_param(x)
+
+        if self.with_param:
+            if self.xi == None:
+                self.xi = x.detach()
+
+            
+            # embed all of D(xi), taken as variables of u(x, y1, .. yn), so detach from x
+            param_vector = self.func_param(self.xi) #(n, 1) D at x_res_train
+            param_vector = param_vector.view(1,-1) #convert to row vector
+            self.params_expand['D'] = param_vector.expand(x.shape[0], -1) # duplicate n row, n-by-n matrix
+
+            # collect diagonal of D to column vector, should be D(x) at x_res_train
+            # connected to self.params_expand['D']
+            diagonal = torch.diag(self.params_expand['D'])
+            column_vector = diagonal.unsqueeze(1)
+            self.D_eval = column_vector
+
+            y_embed = self.param_embeddings['D'](self.params_expand['D'])
+
+            
+            x_embed += y_embed
+        else:
+            # if u(x), not function of unkown
+            self.params_expand['D'] =self.func_param(x)
+
+        return x_embed
+
+
+        
+    
+    def embedding_to_u(self, X):
+        # X is the embedded input, linear combination of the "features"
         Xtmp = self.act(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
@@ -95,6 +114,15 @@ class PoiDenseNet(DenseNet):
             Xtmp = hidden_output
         
         u = self.output_layer(Xtmp)
+        
+        return u
+
+    def forward(self, x):
+        
+        X = self.embedding(x)
+        
+        u = self.embedding_to_u(X)
+
         u = self.output_transform(x, u)
         return u
     
@@ -179,8 +207,12 @@ class PoiVarProblem(BaseProblem):
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         u_xx = torch.autograd.grad(D*u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-                    
         res = u_xx - self.f(x)
+        
+        if glob_test:
+            res = D + u
+                    
+        
         
         return res, u
 
@@ -198,7 +230,7 @@ class PoiVarProblem(BaseProblem):
                         lambda_transform=self.lambda_transform,
                         params_dict= self.param,
                         trainable_param = self.opts['trainable_param'])
-        net.setup_embedding_layers()
+        net.setup_embedding_layers(self.dataset['xi'].shape[0])
         return net
 
     def print_info(self):
@@ -236,8 +268,7 @@ class PoiVarProblem(BaseProblem):
         dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
 
         # collocation point for emebdding of D
-        dataset['xi'] = torch.linspace(0, 1, dsopt['Nxi']).view(-1, 1)
-        # dataset['xi'] = dataset['x_res_train']
+        dataset['xi'] = dataset['x_res_train']
 
         dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'])
 
@@ -264,7 +295,6 @@ class PoiVarProblem(BaseProblem):
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
-            
             self.dataset['upred_res_test'] = net(self.dataset['x_res_test'])
             coef = net.func_param(self.dataset['x_res_test'])
             self.dataset['func_res_test'] = coef

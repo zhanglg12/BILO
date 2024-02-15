@@ -80,8 +80,6 @@ class lossCollection:
         self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
 
         n = self.res.shape[0]
-        if self.idmx is None:
-            self.idmx = torch.eye(n).to(self.res.device) # identity matrix for computing gradient of residual w.r.t. parameter
 
         resgradmse = 0.0        
         for pname in self.net.trainable_param:
@@ -89,6 +87,7 @@ class lossCollection:
                 tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_expand[pname], grad_outputs=torch.ones_like(self.res_unbind[j]),
                 create_graph=True, retain_graph=True,allow_unused=True)[0]
 
+                # import pdb; pdb.set_trace()
                 resgradmse += torch.sum(torch.pow(tmp, 2))
         
         return resgradmse/n
