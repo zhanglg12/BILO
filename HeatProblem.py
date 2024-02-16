@@ -18,52 +18,58 @@ class HeatDenseNet(DenseNet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # override the embedding function, also enforce dirichlet boundary condition
-        self.func_param = ParamFunction(depth=4, width=32, output_transform=lambda x, u: u * x * (1.0 - x))
-        self.use_exact_u0 = False
+        
+        self.func_param = ParamFunction(depth=4, width=16, output_transform=lambda x, u: u * x * (1.0 - x))
         self.collect_trainable_param()
 
-    def setup_embedding_layers(self, in_features):
 
-        self.param_embeddings = nn.ModuleDict({'u0': nn.Linear(in_features, self.width, bias=True)})
+    def setup_embedding_layers(self):
+
+        self.param_embeddings = nn.ModuleDict({'u0': nn.Linear(1, self.width, bias=False)})
 
         # set requires_grad to False
         for embedding_weights in self.param_embeddings.parameters():
             embedding_weights.requires_grad = False
+    
+    def output_transform(self, x, u):
+        # override the output transform attribute of DenseNet
+        if self.use_exact_u0 is True:
+            # only for testcase 0
+            u0 = torch.sin(torch.pi  * x[:, 1:2])
+        else:
+            u0 = self.params_expand['u0']
 
+        return u * x[:, 1:2] * (1 - x[:, 1:2]) * x[:, 0:1] + u0
 
-    def embedding(self, x, x_i):
-        # override the embedding function
-        # x: (batch, 2), second dimension is the x coordinate
-        # fourier feature embedding
-        
+    def embed_x(self, x):
+        '''embed x to the input layer'''
         if self.fourier:
-            x = torch.sin(2 * torch.pi * self.fflayer(x))
-        x = self.input_layer(x)
+            x_embed = torch.sin(2 * torch.pi * self.fflayer(x))
+        x_embed = self.input_layer(x)
+        return x_embed
 
+    def embedding(self, x):
+        # override the embedding function
+        
         # have to evaluate self.func_param(xcoord) inside the network
         # otherwise self.func_param is not in the computation graph
-        # assert self.with_func is True, "with_func=True to use HeatDenseNet"
-        # assert params_dict is None, "have to eval f(x) inside the network"
-        
+    
+        x_embed = self.embed_x(x)
+        x_coord = x[:, 1:2]
+
         if self.with_param:
-            # evaluted func_param at xcoord, then do embedding
-            # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
-            for name in self.params_dict.keys():
-                param_vector = self.func_param(x_i)
-                param_vector = param_vector.view(1, -1)
-                self.params_expand[name] = param_vector.expand(x.shape[0], -1)
-                param_embedding = self.param_embeddings[name](self.params_expand[name])
-                x += param_embedding
-    
+            u0 = self.func_param(x_coord) #(n, 1) D at x_res_train
+            self.params_expand['u0'] = u0
+            y_embed = self.param_embeddings['u0'](u0)
+            x_embed += y_embed
         else:
-            for name in self.params_dict.keys():
-                self.params_expand[name] =  self.func_param(x_i)
-        return x
-    
-    def forward(self, x, x_i):
-        
-        X = self.embedding(x, x_i)
+            # if u(x), not function of unkown
+            self.params_expand['u0'] = self.func_param(x_coord)
+            
+        return x_embed
+
+    def embedding_to_u(self, X):
+        # X is the embedded input, linear combination of the "features"
         Xtmp = self.act(X)
         
         for i, hidden_layer in enumerate(self.hidden_layers):
@@ -74,19 +80,17 @@ class HeatDenseNet(DenseNet):
             Xtmp = hidden_output
         
         u = self.output_layer(Xtmp)
+        
+        return u
+
+    def forward(self, x):
+        
+        X = self.embedding(x)
+        
+        u = self.embedding_to_u(X)
+
         u = self.output_transform(x, u)
         return u
-    
-    def output_transform(self, x, u):
-        # override the output transform attribute of DenseNet
-        if self.use_exact_u0 is True:
-            # only for testcase 0
-            u0 = torch.sin(torch.pi  * x[:, 1:2])
-        else:
-            u0 = self.func_param(x[:, 1:2])
-
-        return u * x[:, 1:2] * (1 - x[:, 1:2]) * x[:, 0:1] + u0
-
 
   
 class HeatProblem(BaseProblem):
@@ -97,20 +101,27 @@ class HeatProblem(BaseProblem):
         self.opts=kwargs
  
         self.testcase = kwargs['testcase']
-        self.D = kwargs['D']
         self.use_exact_u0 = kwargs['use_exact_u0']
         self.use_res = kwargs['use_res']
-
+        self.D = kwargs['D']
         # placeholder for parameter, only name is used
         self.param = {'u0': 0.0}
 
         self.dataset = None
+        if kwargs['datafile']:
+            self.dataset = DataSet(kwargs['datafile'])
 
     def u_exact(self, t, x):
         if self.testcase == 0:
             # exact solution E^(-D Pi^2 t) Sin[Pi x]
             return np.sin(np.pi  * x) * np.exp(-np.pi**2 * self.D * t)
-        elif self.testcase == 1:
+        
+        if self.testcase == 1:
+            # halfe of testcase 0
+            # exact solution E^(-D Pi^2 t) Sin[Pi x] /2
+            return np.sin(np.pi  * x) * np.exp(-np.pi**2 * self.D * t) / 2.0
+
+        elif self.testcase == 2:
             # inifite serie
             # C = -16/pi^3
             # sum_n=1^inf C (-1+(-1)^n) Sin[n pi x] E^(-D n^2 pi^2 t)/n^3
@@ -128,24 +139,24 @@ class HeatProblem(BaseProblem):
             # initial condition Sin[Pi x]
             return np.sin(np.pi  * x)
         elif self.testcase == 1:
+            return np.sin(np.pi  * x) / 2.0
+        elif self.testcase == 2:
             # initial condition 4 x (1 - x)
             return 4 * x * (1 - x)
         else:
             raise ValueError('Invalid testcase')
     
-    def residual(self, nn, X_in, x_ic):
+    def residual(self, nn, X_in):
         
-        X_in.requires_grad = True
-        x_ic.requires_grad = True
-        
+        X_in.requires_grad_(True)
+
         t = X_in[:, 0:1]
         x = X_in[:, 1:2]
         
         # Concatenate sliced tensors to form the input for the network
         X = torch.cat((t,x), dim=1)
 
-        nn_out = nn(X, x_ic)
-        u = nn_out * x * (1 - x) * t + nn.params_expand['u0']
+        u = nn(X)
         
         u_t = torch.autograd.grad(u, t,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
@@ -160,16 +171,16 @@ class HeatProblem(BaseProblem):
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
-        res, pred = self.residual(net, self.dataset['X_res'], self.dataset['x_ic'])
+        res, pred = self.residual(net, self.dataset['X_res'])
         return res, pred
     
     def get_data_loss(self, net):
         # get data loss
         if self.use_res:
-            u_pred = net(self.dataset['X_res'],self.dataset['x_ic'])
+            u_pred = net(self.dataset['X_res'])
             loss = torch.mean(torch.square(u_pred - self.dataset['u_res']))
         else:
-            u_pred = net(self.dataset['X_dat'],self.dataset['x_ic'])
+            u_pred = net(self.dataset['X_dat'])
             loss = torch.mean(torch.square(u_pred - self.dataset['u_dat']))
         
         return loss
@@ -187,8 +198,9 @@ class HeatProblem(BaseProblem):
         net = HeatDenseNet(**kwargs,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])
-        net.setup_embedding_layers(self.dataset['Nx'])
-        net.use_exact_u0 = True if self.use_exact_u0 else False
+        net.use_exact_u0 = self.use_exact_u0
+        net.setup_embedding_layers()
+        
         return net
 
     def print_info(self):
@@ -210,14 +222,15 @@ class HeatProblem(BaseProblem):
         
         t = np.linspace(0, 1, Nt).reshape(-1, 1)
         x = np.linspace(0, 1, Nx).reshape(-1, 1)
-        # T,X are Nx by Nt, first dimension is x, second dimension is t
-        # after flattern, t increase and repeat, x repeat and increase
-        T, X = np.meshgrid(t, x)
+        # X are Nx by Nt, first dimension is t, second dimension is x
+        
+        X,T = np.meshgrid(x,t)
 
         # reshape to (Nt*Nx, 2)
-        dataset['X_res'] = np.column_stack((T.flatten().reshape(-1, 1), X.flatten().reshape(-1, 1)))
+        # X increase and repeat, T repeat and increase
+        dataset['X_res'] = np.column_stack((T.reshape(-1, 1), X.reshape(-1, 1)))
         u_res = self.u_exact(T, X)
-        dataset['u_res'] = u_res.flatten().reshape(-1, 1)
+        dataset['u_res'] = u_res.reshape(-1, 1)
         
         # X_dat is (all 1, x)
         dataset['X_dat'] = np.column_stack((np.ones((Nx,1)), x))
@@ -227,16 +240,69 @@ class HeatProblem(BaseProblem):
         # x_ic is x coord only
         dataset['x_ic'] = x
         dataset['u0_exact_ic'] = self.u0_exact(x)
+        self.dataset = dataset
+    
+    def create_dataset_from_file(self, dsopt):
+        '''create dataset from file'''
+        assert self.dataset is not None, 'datafile provide, dataset should not be None'
+        uname = f'u{self.testcase}'
+        icname = f'ic{self.testcase}'
+        
+        # get data from file
+        u = self.dataset[uname]
+        ic = self.dataset[icname]
+
+        gt = self.dataset['gt']
+        gx = self.dataset['gx']
+        nt, nx = gt.shape
+        
+        # downsample size
+        Nt = dsopt['Nt']
+        Nx = dsopt['Nx']
+        # copy to dataset
+        self.dataset['Nt'] = Nt
+        self.dataset['Nx'] = Nx
+
+        tidx = np.linspace(0, nt-1, Nt, dtype=int)
+        xidx = np.linspace(0, nx-1, Nx, dtype=int)
+
+        u = u[np.ix_(tidx, xidx)]
+        
+        ic = ic[xidx]
+        gt = gt[np.ix_(tidx, xidx)]
+        gx = gx[np.ix_(tidx, xidx)]
+
+        # Prepare data for PINN
+        self.dataset['X_res'] = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
+        self.dataset['u_res'] = u.reshape(-1, 1)
+
+        # X_dat is last row of gt(end,:), gx(end,:)
+        self.dataset['X_dat'] = np.column_stack((gt[-1, :].reshape(-1, 1), gx[-1, :].reshape(-1, 1)))
+        self.dataset['u_dat'] = u[-1, :].reshape(-1, 1)
+
+        # x_ic is x coord only
+        self.dataset['x_ic'] = gx[-1, :].reshape(-1, 1)
+        self.dataset['u0_exact_ic'] = ic
+
+        self.dataset.printsummary()
         
 
-        self.dataset = dataset
-        self.dataset.to_torch()
-        self.dataset.printsummary()
-
-
-    def setup_dataset(self, dsopt, noise_opt = None):
+    def setup_dataset(self, dsopt, noise_opt):
         '''add noise to dataset'''
-        self.create_dataset_from_pde(dsopt)
+        if self.dataset is None:
+            self.create_dataset_from_pde(dsopt)
+        else:
+            self.create_dataset_from_file(dsopt)
+        
+        self.dataset.to_torch()
+
+        if noise_opt['use_noise']:
+            x = self.dataset['X_dat'][:, 1]
+            noise = generate_grf(x, noise_opt['variance'], noise_opt['length_scale'])
+            self.dataset['noise'] = noise.reshape(-1, 1)
+            self.dataset['u_dat'] = self.dataset['u_dat'] + self.dataset['noise']
+    
+            
         
     
     def func_mse(self, net):
@@ -248,13 +314,14 @@ class HeatProblem(BaseProblem):
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
-            self.dataset['upred_res'] = net(self.dataset['X_res'], self.dataset['x_ic'])
-            self.dataset['upred_dat'] = net(self.dataset['X_dat'], self.dataset['x_ic'])
+            self.dataset['upred_res'] = net(self.dataset['X_res'])
+            self.dataset['upred_dat'] = net(self.dataset['X_dat'])
             self.dataset['u0_pred_ic'] = net.func_param(self.dataset['x_ic'])
         
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
+        
         x  = self.dataset['x_ic']
         u0_exact = self.dataset['u0_exact_ic']
         with torch.no_grad():
@@ -280,14 +347,12 @@ class HeatProblem(BaseProblem):
     def plot_upred_res_meshgrid(self, savedir=None):
         # plot u at X_res, 
         
-        
         u = self.dataset['u_res']
         u_pred = self.dataset['upred_res']
         
-
         # reshape to 2D
-        u = u.reshape(self.dataset['Nx'],self.dataset['Nt'])
-        u_pred = u_pred.reshape(self.dataset['Nx'],self.dataset['Nt'])
+        u = u.reshape( self.dataset['Nt'], self.dataset['Nx'])
+        u_pred = u_pred.reshape(self.dataset['Nt'], self.dataset['Nx'])
         err = u - u_pred
 
         fig, ax = plt.subplots(1, 3, figsize=(15, 5))
@@ -300,18 +365,18 @@ class HeatProblem(BaseProblem):
         ax[1].set_title('Exact')
         fig.colorbar(cax, ax=ax[1])
 
-        cax = ax[2].imshow(err, cmap='viridis', extent=[0, 1, 0, 1], origin='lower')
+        cax = ax[2].imshow(err, cmap='plasma', extent=[0, 1, 0, 1], origin='lower')
         ax[2].set_title('Error')
         fig.colorbar(cax, ax=ax[2])
 
         fig.tight_layout()
-
 
         if savedir is not None:
             path = os.path.join(savedir, 'fig_upred_grid.png')
             plt.savefig(path, dpi=300, bbox_inches='tight')
             print(f'fig saved to {path}')
     
+
     def plot_upred_res(self, savedir=None):
         # plot u at X_res,         
         u = self.dataset['u_res']
@@ -323,8 +388,8 @@ class HeatProblem(BaseProblem):
         tidx = np.linspace(0, self.dataset['Nt']-1, N, dtype=int)
 
         # reshape to 2D
-        u = u.reshape(self.dataset['Nx'],self.dataset['Nt'])
-        u_pred = u_pred.reshape(self.dataset['Nx'],self.dataset['Nt'])
+        u = u.reshape(self.dataset['Nt'],self.dataset['Nx'])
+        u_pred = u_pred.reshape(self.dataset['Nt'],self.dataset['Nx'])
         fig, ax = plt.subplots()
         
         # get colororder
@@ -332,8 +397,8 @@ class HeatProblem(BaseProblem):
         k = 0
         for i in tidx:
             # plot u at each t
-            ax.plot(u[:, i], label=f'Exact t={i/self.dataset["Nt"]:.2f}', color=C[k])
-            ax.plot(u_pred[:, i], label=f'NN t={i/self.dataset["Nt"]:.2f}', linestyle='--', color=C[k])
+            ax.plot(u[i,:], label=f'Exact t={i/self.dataset["Nt"]:.2f}', color=C[k])
+            ax.plot(u_pred[i,:], label=f'NN t={i/self.dataset["Nt"]:.2f}', linestyle='--', color=C[k])
             k += 1
         ax.legend(loc="best")
         ax.grid()
@@ -355,6 +420,24 @@ class HeatProblem(BaseProblem):
             path = os.path.join(savedir, 'fig_ic_pred.png')
             plt.savefig(path, dpi=300, bbox_inches='tight')
             print(f'fig saved to {path}')
+    
+    def plot_sample(self, savedir=None):
+        '''plot distribution of collocation points'''
+        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+        ax[0].plot(self.dataset['X_res'][:, 1], self.dataset['X_res'][:, 0], 'o', label='X_res')
+        ax[1].plot(self.dataset['X_dat'][:, 1], self.dataset['X_dat'][:, 0], 'o', label='X_dat')
+        # same xlim ylim
+        ax[0].set_xlim([0, 1])
+        ax[0].set_ylim([0, 1])
+        ax[1].set_xlim([0, 1])
+        ax[1].set_ylim([0, 1])
+        # legend
+        ax[0].legend(loc="best")
+        ax[1].legend(loc="best")
+        if savedir is not None:
+            path = os.path.join(savedir, 'fig_Xdist.png')
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {path}')
 
     def visualize(self, savedir=None):
         '''visualize the problem'''
@@ -362,6 +445,7 @@ class HeatProblem(BaseProblem):
         self.plot_upred_res(savedir=savedir)
         self.plot_upred_dat(savedir=savedir)
         self.plot_ic_pred(savedir=savedir)
+        self.plot_sample(savedir=savedir)
                             
         
         
@@ -390,7 +474,7 @@ if __name__ == "__main__":
 
     prob = HeatProblem(**optobj.opts['pde_opts'])
     pdenet = prob.setup_network(**optobj.opts['nn_opts'])
-    prob.setup_dataset(optobj.opts['dataset_opts'])
+    prob.setup_dataset(optobj.opts['dataset_opts'], optobj.opts['noise_opts'])
 
     prob.make_prediction(pdenet)
     prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
