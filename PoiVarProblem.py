@@ -36,8 +36,8 @@ class PoiDenseNet(DenseNet):
             # For testing, PoiDenseNet is linear
             self.act = nn.Identity()
             self.output_layer = nn.Identity()
-
-        self.func_param = ParamFunction(depth=4, width=16)
+        else:
+            self.func_param = ParamFunction(depth=4, width=16)
 
         self.collect_trainable_param()
         self.D_eval = None
@@ -51,6 +51,9 @@ class PoiDenseNet(DenseNet):
         if GLOBTEST:
             # set weight = 1, identity 
             self.param_embeddings['D'].weight.data.fill_(1.0)
+            self.input_layer.weight.data.fill_(1.0)
+            self.input_layer.bias.data.fill_(0.0)
+            self.lambda_transform = lambda x, u: u**2
             
         # set requires_grad to False
         for embedding_weights in self.param_embeddings.parameters():
@@ -195,12 +198,29 @@ class PoiVarProblem(BaseProblem):
         D = nn.D_eval
         u_x = torch.autograd.grad(u, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
-        u_xx = torch.autograd.grad(D*u_x, x,
+        dxDux = torch.autograd.grad(D*u_x, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
-        res = u_xx - self.dataset['f_res_train']
+        res = dxDux - self.dataset['f_res_train']
         
-        if GLOBTEST:
-            res = D + u
+        # used for checking computation here
+        # if GLOBTEST:
+            # when taking derivative of r = (Du')' - f w.r.t D
+            # r = D' u' + D u'' - f, note that u is function of D also
+            # dr/dD = D' d/dD (u') + u'' + D d/dD(u'')
+
+            # u_xx = torch.autograd.grad(u_x, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
+            # dx = torch.autograd.grad(D, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(x))[0]
+            # dz_u_xx = torch.autograd.grad(u_xx, nn.params_expand['D'], create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_xx))[0]
+            # dz_u_x = torch.autograd.grad(u_x, nn.params_expand['D'], create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
+            # dz_u = torch.autograd.grad(u, nn.params_expand['D'], create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u_x))[0]
+
+            # tmp = dx * dz_u_x + u_xx + D * dz_u_xx
+
+            # dres = torch.autograd.grad(res, nn.params_expand['D'], grad_outputs=torch.ones_like(res),
+            #     create_graph=True, retain_graph=True,allow_unused=True)[0]
+            
+            # tmp is the same as dres
+            # import pdb; pdb. set_trace()
                     
         return res, u
 

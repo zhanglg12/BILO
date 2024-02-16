@@ -86,8 +86,7 @@ class lossCollection:
             for j in range(self.pde.output_dim):
                 tmp = torch.autograd.grad(self.res_unbind[j], self.net.params_expand[pname], grad_outputs=torch.ones_like(self.res_unbind[j]),
                 create_graph=True, retain_graph=True,allow_unused=True)[0]
-
-                # import pdb; pdb.set_trace()
+                
                 resgradmse += torch.sum(torch.pow(tmp, 2))
         
         return resgradmse/n
