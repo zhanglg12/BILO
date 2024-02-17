@@ -22,11 +22,17 @@ class PoiDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+
+        fdepth = kwargs['fdepth']
+        fwidth = kwargs['fwidth']
+        activation = kwargs['activation']
+        output_activation = kwargs['output_activation']
         
         # override the embedding function, also enforce dirichlet boundary condition
         
         if GLOBTEST:
-            self.func_param = ParamFunction(depth=1, width=1, 
+            self.func_param = ParamFunction(fdepth=1, fwidth=1, 
             activation='id',output_activation='id')
             # set bias = 1, weight = 0
             self.func_param.layers[0].bias.data.fill_(1.0)
@@ -37,7 +43,8 @@ class PoiDenseNet(DenseNet):
             self.act = nn.Identity()
             self.output_layer = nn.Identity()
         else:
-            self.func_param = ParamFunction(depth=4, width=16)
+            self.func_param = ParamFunction(fdepth=fdepth, fwidth=fwidth,
+                                        activation=activation, output_activation=output_activation)
 
         self.collect_trainable_param()
         self.D_eval = None
@@ -114,6 +121,18 @@ class PoiDenseNet(DenseNet):
         
         u = self.embedding_to_u(X)
 
+        u = self.output_transform(x, u)
+        return u
+    
+    def variation(self, x, z):
+        '''variation of u w.r.t D
+        Let z be custom function, u = u(x, z)
+        '''
+        x_embed = self.embed_x(x)
+        z_embed = self.param_embeddings['D'](z)
+        X = x_embed + z_embed
+
+        u = self.embedding_to_u(X)
         u = self.output_transform(x, u)
         return u
     
@@ -330,20 +349,65 @@ class PoiVarProblem(BaseProblem):
             self.dataset['func_dat'] = coef
         
         # make prediction with different parameters
-        # self.prediction_variation(net)
+        self.prediction_variation(net)
 
-    # def prediction_variation(self, net):
-    #     # make prediction with different parameters
-    #     x = self.dataset['x_dat']
-    #     deltas = [0.0, 0.1, -0.1]
+    def prediction_variation(self, net):
+        # make prediction with different parameters
+        x = self.dataset['x_dat']
+        
+        # first variation, D+0.1
+        funs = {}
+        funs['shitfplus']= lambda x: 1.0 + 0.1 * torch.ones_like(x)
+        funs['shiftminus'] = lambda x: 1.0 - 0.1 * torch.ones_like(x)
+        funs['linplus'] = lambda x: 1.0 + 0.1 * x
+        funs['cosfull'] = lambda x: 1.0 + 0.1 * torch.cos(2*torch.pi * x)
+        funs['sinfull'] = lambda x: 1.0 + 0.1 * torch.sin(2*torch.pi * x)
+        funs['coshalf'] = lambda x: 1.0 + 0.1 * torch.cos(torch.pi * x)
+        funs['sinhalf'] = lambda x: 1.0 + 0.1 * torch.sin(torch.pi * x)
 
-    #     for delta in deltas:
-    #         # replace parameter
-    #         with torch.no_grad():
-    #             u = net(x, None)
+
+        for funkey, fun in funs.items():
+            # replace parameter
+            with torch.no_grad():
+                z = fun(x)
+                u = net.variation(x, z )
                 
-    #         key = f'upred_del{delta}_dat'
-    #         self.dataset[key] = u
+            key = f'uvar_{funkey}_dat'
+            var = f'Dvar_{funkey}_dat'
+            self.dataset[key] = u
+            self.dataset[var] = z
+
+    
+    def plot_variation(self, savedir=None):
+        # go through uvar and var
+        def get_funkey(key):
+            return key.split('_')[1]
+            
+
+        for ukey in self.dataset.keys():
+            if ukey.startswith('uvar'):
+                fig, ax = plt.subplots(2,1)
+
+                funkey = get_funkey(ukey)
+                Dkey = ukey.replace('uvar', 'Dvar')
+                # plot u
+                ax[0].plot(self.dataset['x_dat'], self.dataset['u_dat'], label='u')
+                ax[0].plot(self.dataset['x_dat'], self.dataset[ukey], label=funkey)
+                ax[0].legend(loc="best")
+                # plot var
+                
+                ax[1].plot(self.dataset['x_dat'], self.dataset[Dkey], label=funkey)
+                ax[1].plot(self.dataset['x_dat'], self.dataset['D_dat'], label='D')
+                ax[1].legend(loc="best")
+
+                if savedir is not None:
+                    path = os.path.join(savedir, f'fig_var_{funkey}.png')
+                    plt.savefig(path, dpi=300, bbox_inches='tight')
+                    print(f'fig saved to {path}')
+
+        
+
+
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
@@ -382,6 +446,7 @@ class PoiVarProblem(BaseProblem):
         '''visualize the problem'''
         self.plot_upred(savedir)
         self.plot_Dpred(savedir)
+        self.plot_variation(savedir)
 
 
 if __name__ == "__main__":
@@ -392,8 +457,9 @@ if __name__ == "__main__":
 
 
     optobj = Options()
-    optobj.parse_args(*sys.argv[1:])
     optobj.opts['nn_opts']['with_func'] = True
+    optobj.opts['pde_opts']['problem'] = 'poivar'
+    optobj.parse_args(*sys.argv[1:])
     
     
     device = set_device('cuda')
