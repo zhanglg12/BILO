@@ -146,13 +146,14 @@ class EarlyStopping:
         if epoch >= self.max_iter:
             print('\nStop due to max iteration')
             return True
+
+        if epoch < self.burnin:
+            return False
         
         if loss < self.tolerance:
             print('Stop due to loss {loss} < {self.tolerance}')
             return True
          
-        if epoch < self.burnin:
-            return False
 
         if self.monitor_loss:
             if self.best_loss is None:

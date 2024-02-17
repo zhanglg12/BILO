@@ -18,7 +18,6 @@ class HeatDenseNet(DenseNet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        
         self.func_param = ParamFunction(depth=4, width=16, output_transform=lambda x, u: u * x * (1.0 - x))
         self.collect_trainable_param()
 
@@ -104,12 +103,13 @@ class HeatProblem(BaseProblem):
         self.use_exact_u0 = kwargs['use_exact_u0']
         self.use_res = kwargs['use_res']
         self.D = kwargs['D']
-        # placeholder for parameter, only name is used
+        
         self.param = {'u0': 0.0}
 
         self.dataset = None
         if kwargs['datafile']:
             self.dataset = DataSet(kwargs['datafile'])
+            self.D = self.dataset['D']
 
     def u_exact(self, t, x):
         if self.testcase == 0:
@@ -171,17 +171,13 @@ class HeatProblem(BaseProblem):
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
-        res, pred = self.residual(net, self.dataset['X_res'])
+        res, pred = self.residual(net, self.dataset['X_res_train'])
         return res, pred
     
     def get_data_loss(self, net):
         # get data loss
-        if self.use_res:
-            u_pred = net(self.dataset['X_res'])
-            loss = torch.mean(torch.square(u_pred - self.dataset['u_res']))
-        else:
-            u_pred = net(self.dataset['X_dat'])
-            loss = torch.mean(torch.square(u_pred - self.dataset['u_dat']))
+        u_pred = net(self.dataset['X_dat_train'])
+        loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
         
         return loss
 
@@ -216,75 +212,80 @@ class HeatProblem(BaseProblem):
 
         Nt = dsopt['Nt']
         Nx = dsopt['Nx']
-
         dataset['Nt'] = Nt
         dataset['Nx'] = Nx
         
-        t = np.linspace(0, 1, Nt).reshape(-1, 1)
-        x = np.linspace(0, 1, Nx).reshape(-1, 1)
+        t = np.linspace(0, 1, 1001).reshape(-1, 1)
+        x = np.linspace(0, 1, 1001).reshape(-1, 1)
         # X are Nx by Nt, first dimension is t, second dimension is x
-        
         X,T = np.meshgrid(x,t)
+        u = self.u_exact(T, X)
 
-        # reshape to (Nt*Nx, 2)
-        # X increase and repeat, T repeat and increase
-        dataset['X_res'] = np.column_stack((T.reshape(-1, 1), X.reshape(-1, 1)))
-        u_res = self.u_exact(T, X)
-        dataset['u_res'] = u_res.reshape(-1, 1)
-        
-        # X_dat is (all 1, x)
-        dataset['X_dat'] = np.column_stack((np.ones((Nx,1)), x))
-        u_dat = self.u_exact(1.0, x)
-        dataset['u_dat'] = u_dat.reshape(-1, 1)
- 
-        # x_ic is x coord only
-        dataset['x_ic'] = x
-        dataset['u0_exact_ic'] = self.u0_exact(x)
+        # for testing and plotting
+        dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(T, X, u)
+
+        # for training
+        gt, gx, u = self.griddata_subsample(T, X, u, Nt, Nx)
+        dataset['X_res_train'], dataset['u_res_train'], dataset['X_dat_train'], dataset['u_dat_train'], dataset['x_ic_train'], dataset['u_ic_train'] = self.griddata_to_tensor(gt, gx, u)
+
+        dataset.printsummary()
+
         self.dataset = dataset
     
+    def griddata_subsample(self, gt, gx, u, Nt, Nx):
+        '''downsample grid data'''
+        nt, nx = gt.shape
+        tidx = np.linspace(0, nt-1, Nt, dtype=int)
+        xidx = np.linspace(0, nx-1, Nx, dtype=int)
+
+        su = u[np.ix_(tidx, xidx)]
+        sgt = gt[np.ix_(tidx, xidx)]
+        sgx = gx[np.ix_(tidx, xidx)]
+
+        return sgt, sgx, su
+
+    def griddata_to_tensor(self, gt, gx, u):
+        '''convert grid data to tensor for training'''
+        X_res = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
+        u_res = u.reshape(-1, 1)
+
+        # X_dat is last row of gt(end,:), gx(end,:)
+        X_dat = np.column_stack((gt[-1, :].reshape(-1, 1), gx[-1, :].reshape(-1, 1)))
+        u_dat = u[-1, :].reshape(-1, 1)
+
+        # x_ic is x coord only
+        x_ic = gx[-1, :].reshape(-1, 1)
+        u_ic = u[0, :].reshape(-1, 1)
+
+        return X_res, u_res, X_dat, u_dat, x_ic, u_ic
+
     def create_dataset_from_file(self, dsopt):
         '''create dataset from file'''
         assert self.dataset is not None, 'datafile provide, dataset should not be None'
+        dataset = self.dataset
+        
         uname = f'u{self.testcase}'
         icname = f'ic{self.testcase}'
-        
         # get data from file
-        u = self.dataset[uname]
-        ic = self.dataset[icname]
-
-        gt = self.dataset['gt']
-        gx = self.dataset['gx']
-        nt, nx = gt.shape
+        u = dataset[uname]
+        gt = dataset['gt']
+        gx = dataset['gx']
         
         # downsample size
         Nt = dsopt['Nt']
         Nx = dsopt['Nx']
-        # copy to dataset
-        self.dataset['Nt'] = Nt
-        self.dataset['Nx'] = Nx
+        dataset['Nt'] = Nt
+        dataset['Nx'] = Nx
 
-        tidx = np.linspace(0, nt-1, Nt, dtype=int)
-        xidx = np.linspace(0, nx-1, Nx, dtype=int)
+        # for testing and plotting
+        dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(gt, gx, u)
 
-        u = u[np.ix_(tidx, xidx)]
+        # for training
+        gt, gx, u = self.griddata_subsample(gt, gx, u, Nt, Nx)
+        dataset['X_res_train'], dataset['u_res_train'], dataset['X_dat_train'], dataset['u_dat_train'], dataset['x_ic_train'], dataset['u_ic_train'] = self.griddata_to_tensor(gt, gx, u)
         
-        ic = ic[xidx]
-        gt = gt[np.ix_(tidx, xidx)]
-        gx = gx[np.ix_(tidx, xidx)]
 
-        # Prepare data for PINN
-        self.dataset['X_res'] = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
-        self.dataset['u_res'] = u.reshape(-1, 1)
-
-        # X_dat is last row of gt(end,:), gx(end,:)
-        self.dataset['X_dat'] = np.column_stack((gt[-1, :].reshape(-1, 1), gx[-1, :].reshape(-1, 1)))
-        self.dataset['u_dat'] = u[-1, :].reshape(-1, 1)
-
-        # x_ic is x coord only
-        self.dataset['x_ic'] = gx[-1, :].reshape(-1, 1)
-        self.dataset['u0_exact_ic'] = ic
-
-        self.dataset.printsummary()
+        dataset.printsummary()
         
 
     def setup_dataset(self, dsopt, noise_opt):
@@ -297,33 +298,30 @@ class HeatProblem(BaseProblem):
         self.dataset.to_torch()
 
         if noise_opt['use_noise']:
-            x = self.dataset['X_dat'][:, 1]
+            x = self.dataset['X_dat_train'][:, 1]
             noise = generate_grf(x, noise_opt['variance'], noise_opt['length_scale'])
             self.dataset['noise'] = noise.reshape(-1, 1)
-            self.dataset['u_dat'] = self.dataset['u_dat'] + self.dataset['noise']
-    
-            
-        
+            self.dataset['u_dat_train'] = self.dataset['u_dat_train'] + self.dataset['noise']
     
     def func_mse(self, net):
         '''mean square error of variable parameter'''
         x = self.dataset['x_ic']
         y = net.func_param(x)
-        return torch.mean(torch.square(y - self.dataset['u0_exact_ic']))
+        return torch.mean(torch.square(y - self.dataset['u_ic']))
     
     def make_prediction(self, net):
         # make prediction at original X_dat and X_res
         with torch.no_grad():
             self.dataset['upred_res'] = net(self.dataset['X_res'])
             self.dataset['upred_dat'] = net(self.dataset['X_dat'])
-            self.dataset['u0_pred_ic'] = net.func_param(self.dataset['x_ic'])
+            self.dataset['upred_ic'] = net.func_param(self.dataset['x_ic'])
         
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
         
         x  = self.dataset['x_ic']
-        u0_exact = self.dataset['u0_exact_ic']
+        u0_exact = self.dataset['u_ic']
         with torch.no_grad():
             u0_pred = nn.func_param(x)
             err = u0_exact - u0_pred
@@ -335,8 +333,10 @@ class HeatProblem(BaseProblem):
     def plot_upred_dat(self, savedir=None):
         fig, ax = plt.subplots()
         x = self.dataset['X_dat'][:, 1]
+        x_train = self.dataset['X_dat_train'][:, 1]
         ax.plot(x, self.dataset['u_dat'], label='exact')
         ax.plot(x, self.dataset['upred_dat'], label='NN')
+        ax.scatter(x_train, self.dataset['u_dat_train'], label='data')
         ax.legend(loc="best")
         ax.grid()
         if savedir is not None:
@@ -350,9 +350,10 @@ class HeatProblem(BaseProblem):
         u = self.dataset['u_res']
         u_pred = self.dataset['upred_res']
         
+        
         # reshape to 2D
-        u = u.reshape( self.dataset['Nt'], self.dataset['Nx'])
-        u_pred = u_pred.reshape(self.dataset['Nt'], self.dataset['Nx'])
+        u = u.reshape(1001, 1001)
+        u_pred = u_pred.reshape(1001, 1001)
         err = u - u_pred
 
         fig, ax = plt.subplots(1, 3, figsize=(15, 5))
@@ -385,11 +386,11 @@ class HeatProblem(BaseProblem):
         
         # uniformly spaced interger between 0 and Nt
         N = 5
-        tidx = np.linspace(0, self.dataset['Nt']-1, N, dtype=int)
+        tidx = np.linspace(0, 1001-1, N, dtype=int)
 
         # reshape to 2D
-        u = u.reshape(self.dataset['Nt'],self.dataset['Nx'])
-        u_pred = u_pred.reshape(self.dataset['Nt'],self.dataset['Nx'])
+        u = u.reshape(1001,1001)
+        u_pred = u_pred.reshape(1001,1001)
         fig, ax = plt.subplots()
         
         # get colororder
@@ -413,8 +414,8 @@ class HeatProblem(BaseProblem):
     def plot_ic_pred(self, savedir=None):
         ''' plot predicted d and exact d'''
         fig, ax = plt.subplots()
-        ax.plot(self.dataset['x_ic'], self.dataset['u0_pred_ic'], label='NN')
-        ax.plot(self.dataset['x_ic'], self.dataset['u0_exact_ic'], label='Exact')
+        ax.plot(self.dataset['x_ic'], self.dataset['upred_ic'], label='NN')
+        ax.plot(self.dataset['x_ic'], self.dataset['u_ic'], label='Exact')
         ax.legend(loc="best")
         if savedir is not None:
             path = os.path.join(savedir, 'fig_ic_pred.png')
@@ -424,13 +425,13 @@ class HeatProblem(BaseProblem):
     def plot_sample(self, savedir=None):
         '''plot distribution of collocation points'''
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        ax[0].plot(self.dataset['X_res'][:, 1], self.dataset['X_res'][:, 0], 'o', label='X_res')
-        ax[1].plot(self.dataset['X_dat'][:, 1], self.dataset['X_dat'][:, 0], 'o', label='X_dat')
+        ax[0].plot(self.dataset['X_res_train'][:, 1], self.dataset['X_res_train'][:, 0], 'o', label='X_res_train')
+        ax[1].plot(self.dataset['X_dat_train'][:, 1], self.dataset['X_dat_train'][:, 0], 'o', label='X_dat_train')
         # same xlim ylim
-        ax[0].set_xlim([0, 1])
-        ax[0].set_ylim([0, 1])
-        ax[1].set_xlim([0, 1])
-        ax[1].set_ylim([0, 1])
+        ax[0].set_xlim([-0.1, 1.1])
+        ax[0].set_ylim([-0.1, 1.1])
+        ax[1].set_xlim([-0.1, 1.1])
+        ax[1].set_ylim([-0.1, 1.1])
         # legend
         ax[0].legend(loc="best")
         ax[1].legend(loc="best")
