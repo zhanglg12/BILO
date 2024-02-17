@@ -61,9 +61,9 @@ class BaseProblem(ABC):
             pde_param.update(init_param)
 
         net = DenseNet(**kwargs,
-                            lambda_transform=self.lambda_transform,
-                            params_dict=pde_param,
-                            trainable_param = self.opts['trainable_param'])
+                        lambda_transform=self.lambda_transform,
+                        params_dict=pde_param,
+                        trainable_param = self.opts['trainable_param'])
         return net
 
 

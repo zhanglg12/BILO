@@ -18,7 +18,7 @@ class DenseNet(nn.Module):
                 fourier=False,
                 siren=False,
                 with_func=False,
-                trainable_param=[]):
+                trainable_param=[], **kwargs):
         super().__init__()
         
         
@@ -64,7 +64,7 @@ class DenseNet(nn.Module):
 
         # for now, just one function
         if self.with_func:
-            self.func_param = ParamFunction(depth=4, width=32)
+            self.func_param = ParamFunction(fdepth=4, fwidth=32)
             
 
         # activation function
@@ -269,7 +269,7 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
 
 class ParamFunction(nn.Module):
     '''represent unknown f(x) to be learned, diffusion field or initial condition'''
-    def __init__(self, depth=4, width=16, 
+    def __init__(self, fdepth=4, fwidth=16, 
                  activation='tanh', output_activation='softplus', 
                  output_transform=lambda x, u: u):
         super(ParamFunction, self).__init__()
@@ -301,22 +301,22 @@ class ParamFunction(nn.Module):
 
         # Create the layers of the neural network
         layers = []
-        if depth == 1:
-            # Only one layer followed by output_activation if depth is 1
+        if fdepth == 1:
+            # Only one layer followed by output_activation if fdepth is 1
             layers.append(nn.Linear(input_dim, output_dim))
             layers.append(output_activation())
         else:
             # input layer
-            layers.append(nn.Linear(input_dim, width))
+            layers.append(nn.Linear(input_dim, fwidth))
             layers.append(activation())
 
-            # hidden layers (depth - 2 because we already have input and output layers)
-            for _ in range(depth - 2):
-                layers.append(nn.Linear(width, width))
+            # hidden layers (fdepth - 2 because we already have input and output layers)
+            for _ in range(fdepth - 2):
+                layers.append(nn.Linear(fwidth, fwidth))
                 layers.append(activation())
 
             # output layer
-            layers.append(nn.Linear(width, output_dim))
+            layers.append(nn.Linear(fwidth, output_dim))
             layers.append(output_activation())
 
         # Store the layers as a sequential module

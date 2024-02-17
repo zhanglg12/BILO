@@ -17,8 +17,15 @@ class HeatDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        fdepth = kwargs['fdepth']
+        fwidth = kwargs['fwidth']
+        activation = kwargs['activation']
+        output_activation = kwargs['output_activation']
         
-        self.func_param = ParamFunction(depth=4, width=16, output_transform=lambda x, u: u * x * (1.0 - x))
+        self.func_param = ParamFunction(fdepth=fdepth, fwidth=fwidth,
+                                        activation=activation, output_activation=output_activation,
+                                        output_transform=lambda x, u: u * x * (1.0 - x))
         self.collect_trainable_param()
 
 
@@ -194,6 +201,7 @@ class HeatProblem(BaseProblem):
         net = HeatDenseNet(**kwargs,
                             params_dict=pde_param,
                             trainable_param = self.opts['trainable_param'])
+
         net.use_exact_u0 = self.use_exact_u0
         net.setup_embedding_layers()
         

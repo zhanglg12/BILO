@@ -9,26 +9,24 @@ from LorenzProblem import LorenzProblem
 from PoiVarProblem import PoiVarProblem
 from HeatProblem import HeatProblem
 
-def create_pde_problem(**kwargs):
-    problem_type = kwargs['problem']
+def create_pde_problem(pde_opts):
+    problem_type = pde_opts['problem']
     if problem_type == 'poisson':
-        return PoissonProblem(**kwargs)
+        return PoissonProblem(**pde_opts)
     elif problem_type == 'lorenz':
-        return LorenzProblem(**kwargs)
+        return LorenzProblem(**pde_opts)
     elif problem_type == 'simpleode':
-        return SimpleODEProblem(**kwargs)
+        return SimpleODEProblem(**pde_opts)
     elif problem_type == 'fk':
-        return FKproblem(**kwargs)
+        return FKproblem(**pde_opts)
     elif problem_type == 'gbm':
-        return GBMproblem(**kwargs)
+        return GBMproblem(**pde_opts)
     elif problem_type == 'poivar':
-        return PoiVarProblem(**kwargs)
+        return PoiVarProblem(**pde_opts)
     elif problem_type == 'heat':
-        return HeatProblem(**kwargs)
+        return HeatProblem(**pde_opts)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
-
-
 
 # if __name__ == "__main__":
     # simple visualization of the data set

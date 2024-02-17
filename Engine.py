@@ -28,7 +28,6 @@ class Engine:
         self.restore_artifacts = {}
         self.logger = None
 
-        
         self.logger = None
         self.trainer = None
 
@@ -39,9 +38,12 @@ class Engine:
 
     def setup_problem(self):
         # setup pde problem
-        self.pde = create_pde_problem(**(self.opts['pde_opts']))
+        self.pde = create_pde_problem(self.opts['pde_opts'])
+        
         self.pde.setup_dataset(self.opts['dataset_opts'], self.opts['noise_opts'])
         
+        self.net = self.pde.setup_network(**self.opts['nn_opts'])
+
         self.pde.print_info()
 
     def restore_opts(self, restore_opts):
@@ -73,9 +75,6 @@ class Engine:
         
             self.restore_opts(restore_opts)
     
-    def setup_network(self):
-        '''setup network, get network structure if restore'''
-        self.net = self.pde.setup_network(**self.opts['nn_opts'])
         
 
     def setup_trainer(self):

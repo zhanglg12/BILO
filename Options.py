@@ -31,7 +31,7 @@ default_opts = {
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
         'use_res': False, # used in fkproblem and heatproblem, use res as training data
-        'testcase': 0, # only used in PoiVarProblem, 0: simple, 1: sin
+        'testcase': 0, # only used in PoiVarProblem heatproblem, 0: simple, 1: sin
         # for heat problem 0.1 and poisson problem
         'D': 0.1,
         'use_exact_u0':False,
@@ -49,6 +49,12 @@ default_opts = {
         'fourier':False,
         'siren': False,
         'with_func': False,
+    },
+    'func_opts': {
+        'fdepth': 4,
+        'fwidth': 16,
+        'activation': 'tanh',
+        'output_activation': 'softplus',
     },
     
     'dataset_opts': {
@@ -229,14 +235,8 @@ class Options:
             param_val_dict[param_val_list[i]] = ast.literal_eval(param_val_list[i+1])
         return param_val_dict
     
-    def processing(self):
-        ''' handle dependent options '''
-        if self.opts['flags'] != '':
-            self.opts['flags'] = self.opts['flags'].split(',')
-            assert all([flag in ['small','local','wunit','fixiter','lintest'] for flag in self.opts['flags']]), 'invalid flag'
-        else:
-            self.opts['flags'] = []
 
+    def process_flags(self):
         if 'small' in self.opts['flags']:
             # use small network for testing
             self.opts['nn_opts']['depth'] = 4
@@ -245,7 +245,7 @@ class Options:
             self.opts['train_opts']['print_every'] = 1
         
         if 'lintest' in self.opts['flags']:
-            # use small network for testing
+            # use small network (linear function) for testing
             self.opts['nn_opts']['depth'] = 0
             self.opts['nn_opts']['width'] = 1
             self.opts['train_opts']['max_iter'] = 10
@@ -271,6 +271,16 @@ class Options:
         if 'fixiter' in self.opts['flags']:
             # fix number of iterations, do not use early stopping
             self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
+    
+    def processing(self):
+        ''' handle dependent options '''
+        if self.opts['flags'] != '':
+            self.opts['flags'] = self.opts['flags'].split(',')
+            assert all([flag in ['small','local','wunit','fixiter','lintest'] for flag in self.opts['flags']]), 'invalid flag'
+        else:
+            self.opts['flags'] = []
+        
+        self.process_flags()
 
         # training type
         # for vanilla PINN, nn does not include parameter
@@ -298,8 +308,6 @@ class Options:
                 self.opts['train_opts']['net_data'] = False
 
         if self.opts['trainfcn'] != '':
-            
-            
             assert self.opts['trainfcn'] in {'init','inv'}, 'invalid trainfcn'
             self.opts['nn_opts']['with_func'] = True
             
@@ -354,11 +362,16 @@ class Options:
             if self.opts['traintype'] == 'adj-simu':
                 self.opts['pde_opts']['exact_param'] = {'D':2.0}
         
-        
         if self.opts['pde_opts']['problem'] == 'gbm':
             # merge gbm_opts to pde_opts
             self.opts['pde_opts'].update(self.opts['gbm_opts'])
             del self.opts['gbm_opts']
+        
+        if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
+            # merge func_opts to nn_opts
+            self.opts['nn_opts'].update(self.opts['func_opts'])
+        else:
+            del self.opts['func_opts']
         
         # check assumptions
         # fullresgrad and resgradfunc can not both positive
