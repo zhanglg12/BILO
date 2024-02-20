@@ -30,7 +30,9 @@ class lossCollection:
         self.loss_dict = {'res': self.resloss,
         'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
         'bc': self.bcloss,'funcloss':self.funcloss,
-        'resgradfunc': self.resgradfuncloss}
+        'resgradfunc': self.resgradfuncloss,
+        'l2reg': self.l2regloss,
+        'netdata': self.netdataloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -52,6 +54,14 @@ class lossCollection:
         self.res, self.u_pred = self.pde.get_res_pred(self.net)
         val_loss_res = mse(self.res)
         return val_loss_res
+    
+    def l2regloss(self):
+        # l2 regularization of pde parameter
+        # only used for function case.
+        all_params = torch.cat([p.view(-1) for p in self.net.param_pde_trainable])
+
+        return torch.sum(torch.pow(all_params, 2))
+        
 
     def resgradfuncloss(self):
         # compute gradient of residual w.r.t. parameter on every residual point.
@@ -101,6 +111,10 @@ class lossCollection:
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
+        return self.pde.get_data_loss(self.net)
+    
+    def netdataloss(self):
+        # same as data loss, but is used for network weight
         return self.pde.get_data_loss(self.net)
     
     def bcloss(self):

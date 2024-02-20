@@ -19,6 +19,14 @@ class Trainer:
         self.device = device
         self.info = {}
 
+        
+        if opts['whichoptim'] == 'adam':
+            self.optim = optim.Adam
+        elif opts['whichoptim'] == 'adamw':
+            self.optim = optim.AdamW
+        else:
+            raise ValueError(f'optimizer {opts["whichoptim"]} not supported')
+
         self.lossCollection = lossCollection
         
         self.optimizer = {}
@@ -68,7 +76,7 @@ class Trainer:
         self.traintype = traintype
 
         if traintype == 'fwd' or traintype == 'basic':
-            self.optimizer['allparam'] = optim.Adam(self.net.param_all)
+            self.optimizer['allparam'] = self.optim(self.net.param_all)
             self.ftrain = self.train_vanilla
 
         elif traintype == 'adj-init':
@@ -78,7 +86,7 @@ class Trainer:
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde_trainable, 'lr': 0.0}
             ]
-            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
+            self.optimizer['allparam'] = self.optim(optim_param_group,amsgrad=True)
             self.ftrain = self.train_simu
             
 
@@ -88,7 +96,7 @@ class Trainer:
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
                 {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
-            self.optimizer['allparam'] = optim.Adam(optim_param_group, amsgrad=True)
+            self.optimizer['allparam'] = self.optim(optim_param_group, amsgrad=True)
             self.ftrain = self.train_simu
         elif traintype == 'adj-bi':
             # two optimizer, one for net, one for pde
@@ -97,9 +105,9 @@ class Trainer:
                 {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             # all parameters
-            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
+            self.optimizer['allparam'] = self.optim(optim_param_group,amsgrad=True)
             # only network parameter
-            self.optimizer['netparam'] = optim.Adam(self.net.param_net, lr=self.opts['lr_net'],amsgrad=True)
+            self.optimizer['netparam'] = self.optim(self.net.param_net, lr=self.opts['lr_net'], amsgrad=True)
             self.ftrain = self.train_bilevel
         elif traintype == 'adj-bi1opt':
             # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde

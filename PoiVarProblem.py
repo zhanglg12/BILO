@@ -44,7 +44,8 @@ class PoiDenseNet(DenseNet):
             self.output_layer = nn.Identity()
         else:
             self.func_param = ParamFunction(fdepth=fdepth, fwidth=fwidth,
-                                        activation=activation, output_activation=output_activation)
+                                        activation=activation, output_activation=output_activation,
+                                        output_transform=lambda x, u: torch.exp(u * x * (1.0 - x)) )
 
         self.collect_trainable_param()
         self.D_eval = None
@@ -354,16 +355,16 @@ class PoiVarProblem(BaseProblem):
     def prediction_variation(self, net):
         # make prediction with different parameters
         x = self.dataset['x_dat']
-        
+        D0 = self.dataset['D_dat']
         # first variation, D+0.1
         funs = {}
-        funs['shitfplus']= lambda x: 1.0 + 0.1 * torch.ones_like(x)
-        funs['shiftminus'] = lambda x: 1.0 - 0.1 * torch.ones_like(x)
-        funs['linplus'] = lambda x: 1.0 + 0.1 * x
-        funs['cosfull'] = lambda x: 1.0 + 0.1 * torch.cos(2*torch.pi * x)
-        funs['sinfull'] = lambda x: 1.0 + 0.1 * torch.sin(2*torch.pi * x)
-        funs['coshalf'] = lambda x: 1.0 + 0.1 * torch.cos(torch.pi * x)
-        funs['sinhalf'] = lambda x: 1.0 + 0.1 * torch.sin(torch.pi * x)
+        funs['shitfplus']= lambda x: D0 + 0.1 * torch.ones_like(x)
+        funs['shiftminus'] = lambda x: D0 - 0.1 * torch.ones_like(x)
+        funs['linplus'] = lambda x: D0 + 0.1 * x
+        funs['cosfull'] = lambda x: D0 + 0.1 * torch.cos(2*torch.pi * x)
+        funs['sinfull'] = lambda x: D0 + 0.1 * torch.sin(2*torch.pi * x)
+        funs['coshalf'] = lambda x: D0 + 0.1 * torch.cos(torch.pi * x)
+        funs['sinhalf'] = lambda x: D0 + 0.1 * torch.sin(torch.pi * x)
 
 
         for funkey, fun in funs.items():

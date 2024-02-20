@@ -52,20 +52,18 @@ default_opts = {
     },
     'func_opts': {
         'fdepth': 4,
-        'fwidth': 16,
+        'fwidth': 8,
         'activation': 'tanh',
         'output_activation': 'softplus',
     },
     
     'dataset_opts': {
-        'N_res_train': 100,
-        'N_bc_train':100,
-        'N_res_test': 100,
-        'N_dat_train': 100,
-        'N_dat_test': 100,
+        'N_res_train': 101,
+        'N_bc_train':101,
+        'N_res_test': 101,
+        'N_dat_train': 101,
+        'N_dat_test': 101,
 
-        # feature of unkonwn function
-        'Nxi': 11,
         # for heat problem
         'Nx':51,
         'Nt':51,
@@ -85,10 +83,10 @@ default_opts = {
         # for bi-level training
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
-        'net_data':False, # use data loss for network weights
-        'loss_net':'res,fullresgrad,bc', # loss for network weights
+        'loss_net':'res,fullresgrad,bc,netdata', # loss for network weights
         'loss_pde':'data', # loss for pde parameter
         'reset_optim':False, # reset optimizer state
+        'whichoptim':'adam'
     },
     'noise_opts':{
         'use_noise': False,
@@ -103,6 +101,8 @@ default_opts = {
         'paramgrad': None,
         'bc':None,
         'funcloss':None, #mse of unknonw function
+        'l2reg': None,
+        'netdata': None,
     },
     'loss_opts': {
         'msample':100, #number of samples for resgrad
@@ -303,9 +303,6 @@ class Options:
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
 
-            if self.opts['traintype'] != 'adj-init':
-                # set use_dat to False
-                self.opts['train_opts']['net_data'] = False
 
         if self.opts['trainfcn'] != '':
             assert self.opts['trainfcn'] in {'init','inv'}, 'invalid trainfcn'
@@ -313,15 +310,22 @@ class Options:
             
             if self.opts['trainfcn'] == 'init':
                 # for initialization, use mse to train unkonwn function
-                self.opts['train_opts']['loss_pde'] = 'funcloss'
+                self.opts['train_opts']['loss_pde']= 'funcloss'
+                # if l2reg exist, use it for loss_pde
+                if self.opts['weights']['l2reg'] is not None:
+                    self.opts['train_opts']['loss_pde']= 'funcloss,l2reg'
+
+
                 if self.opts['weights']['funcloss'] is None:
                     self.opts['weights']['funcloss'] = 1.0
                 # for initialization, use data loss for network weights
-                self.opts['train_opts']['net_data'] = True
-            
-            if self.opts['trainfcn'] == 'inv':
-                # for inverse problem, use data loss for network weights
-                self.opts['loss_pde'] = 'data'
+                self.opts['weights']['netdata'] = True
+            else:
+                # inverse problem, use data loss for network weights
+                self.opts['train_opts']['loss_pde']= 'data'
+                if self.opts['weights']['l2reg'] is not None:
+                    self.opts['train_opts']['loss_pde']= 'data,l2reg'
+
 
         # convert to list of losses
         self.opts['train_opts']['loss_net'] = self.opts['train_opts']['loss_net'].split(',')
@@ -330,9 +334,7 @@ class Options:
         self.opts['train_opts']['loss_net'] = [loss for loss in self.opts['train_opts']['loss_net'] if self.opts['weights'][loss] is not None]
         self.opts['train_opts']['loss_pde'] = [loss for loss in self.opts['train_opts']['loss_pde'] if self.opts['weights'][loss] is not None]
 
-        # add data to loss_net if net_data is True
-        if self.opts['train_opts']['net_data'] == True:
-            self.opts['train_opts']['loss_net'].append('data')
+        
 
         # After traintype is processed 
         # convert trainable param to list of string, split by ','
@@ -371,7 +373,10 @@ class Options:
             # merge func_opts to nn_opts
             self.opts['nn_opts'].update(self.opts['func_opts'])
         else:
-            del self.opts['func_opts']
+            # can not use l2reg
+            assert self.opts['weights']['l2reg'] is None, 'l2reg can not be used for this problem'
+        
+        del self.opts['func_opts']
         
         # check assumptions
         # fullresgrad and resgradfunc can not both positive
