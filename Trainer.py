@@ -97,6 +97,11 @@ class Trainer:
                 {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             self.optimizer['allparam'] = self.optim(optim_param_group, amsgrad=True)
+
+            # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer['allparam'], gamma=0.999)
+            T_max = self.opts['max_iter']
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer['allparam'], T_max=T_max, eta_min= self.opts['lr_pde']/10.0)
+            
             self.ftrain = self.train_simu
         elif traintype == 'adj-bi':
             # two optimizer, one for net, one for pde
@@ -182,6 +187,7 @@ class Trainer:
 
             # 1 step of GD
             self.optimizer['allparam'].step()
+            # self.scheduler.step()
             epoch += 1
 
 

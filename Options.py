@@ -55,6 +55,7 @@ default_opts = {
         'fwidth': 8,
         'activation': 'tanh',
         'output_activation': 'softplus',
+        'fsiren': False,
     },
     
     'dataset_opts': {
@@ -84,7 +85,7 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
         'loss_net':'res,fullresgrad,bc,netdata', # loss for network weights
-        'loss_pde':'data,funcloss,l2norm,l2weight,l2grad', # loss for pde parameter
+        'loss_pde':'data,l2norm,l2weight,l2grad', # loss for pde parameter
         'reset_optim':True, # reset optimizer state
         'whichoptim':'adam'
     },
@@ -312,6 +313,7 @@ class Options:
             
             if self.opts['trainfcn'] == 'init':
                 # for initialization, use mse to train unkonwn function
+                self.opts['weights']['funcloss'] = 1.0
                 self.opts['train_opts']['loss_pde']= self.opts['train_opts']['loss_pde'].replace('data','funcloss')
 
 

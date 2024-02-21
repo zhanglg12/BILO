@@ -28,6 +28,7 @@ class PoiDenseNet(DenseNet):
         fwidth = kwargs['fwidth']
         activation = kwargs['activation']
         output_activation = kwargs['output_activation']
+        fsiren = kwargs['fsiren']
         
         # override the embedding function, also enforce dirichlet boundary condition
         
@@ -44,6 +45,7 @@ class PoiDenseNet(DenseNet):
             self.output_layer = nn.Identity()
         else:
             self.func_param = ParamFunction(fdepth=fdepth, fwidth=fwidth,
+                                        fsiren=fsiren,
                                         activation=activation, output_activation=output_activation,
                                         output_transform=lambda x, u: u * x * (1.0 - x) + 1.0 )
 

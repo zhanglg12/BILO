@@ -267,16 +267,26 @@ def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):
     return net, opts
 
 
+class Sin(nn.Module):
+    def __init__(self):
+        super(Sin, self).__init__()
+
+    def forward(self, input):
+        return torch.sin(input)
+
 class ParamFunction(nn.Module):
     '''represent unknown f(x) to be learned, diffusion field or initial condition'''
     def __init__(self, fdepth=4, fwidth=16, 
                  activation='tanh', output_activation='softplus', 
+                 fsiren=False,
                  output_transform=lambda x, u: u):
         super(ParamFunction, self).__init__()
         
         # represent single variable function
         input_dim = 1
         output_dim = 1
+
+        self.fsiren = fsiren
 
         if activation == 'tanh':
             activation = nn.Tanh
@@ -288,6 +298,9 @@ class ParamFunction(nn.Module):
             activation = nn.Identity
         else:
             raise ValueError('activation function not supported')
+
+        if self.fsiren:
+            activation = Sin
 
         if output_activation == 'softplus':
             output_activation = nn.Softplus
@@ -324,6 +337,25 @@ class ParamFunction(nn.Module):
 
         # Store the output transformation function
         self.output_transform = output_transform
+
+        # Initialize the weights
+        if self.fsiren:
+            self.siren_init()
+
+
+    def siren_init(self):
+        '''
+        initialize weights for siren
+        '''
+        self.omega_0 = 30
+        with torch.no_grad():
+            for i, layer in enumerate(self.layers):
+                if isinstance(layer, nn.Linear):
+                    if i==0:
+                        layer.weight.uniform_(-1 / layer.in_features, 1 / layer.in_features)
+                    else:
+                        layer.weight.uniform_(-np.sqrt(6 / layer.in_features) / self.omega_0, 
+                                                    np.sqrt(6 / layer.in_features) / self.omega_0)
 
     def forward(self, x):
         # Define the forward pass
