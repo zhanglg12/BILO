@@ -84,8 +84,8 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
         'loss_net':'res,fullresgrad,bc,netdata', # loss for network weights
-        'loss_pde':'data', # loss for pde parameter
-        'reset_optim':False, # reset optimizer state
+        'loss_pde':'data,funcloss,l2norm,l2weight,l2grad', # loss for pde parameter
+        'reset_optim':True, # reset optimizer state
         'whichoptim':'adam'
     },
     'noise_opts':{
@@ -101,8 +101,10 @@ default_opts = {
         'paramgrad': None,
         'bc':None,
         'funcloss':None, #mse of unknonw function
-        'l2reg': None,
+        'l2weight': None,
+        'l2norm': None,
         'netdata': None,
+        'l2grad':None,
     },
     'loss_opts': {
         'msample':100, #number of samples for resgrad
@@ -310,21 +312,7 @@ class Options:
             
             if self.opts['trainfcn'] == 'init':
                 # for initialization, use mse to train unkonwn function
-                self.opts['train_opts']['loss_pde']= 'funcloss'
-                # if l2reg exist, use it for loss_pde
-                if self.opts['weights']['l2reg'] is not None:
-                    self.opts['train_opts']['loss_pde']= 'funcloss,l2reg'
-
-
-                if self.opts['weights']['funcloss'] is None:
-                    self.opts['weights']['funcloss'] = 1.0
-                # for initialization, use data loss for network weights
-                self.opts['weights']['netdata'] = True
-            else:
-                # inverse problem, use data loss for network weights
-                self.opts['train_opts']['loss_pde']= 'data'
-                if self.opts['weights']['l2reg'] is not None:
-                    self.opts['train_opts']['loss_pde']= 'data,l2reg'
+                self.opts['train_opts']['loss_pde']= self.opts['train_opts']['loss_pde'].replace('data','funcloss')
 
 
         # convert to list of losses

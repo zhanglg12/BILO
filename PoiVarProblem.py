@@ -45,7 +45,7 @@ class PoiDenseNet(DenseNet):
         else:
             self.func_param = ParamFunction(fdepth=fdepth, fwidth=fwidth,
                                         activation=activation, output_activation=output_activation,
-                                        output_transform=lambda x, u: torch.exp(u * x * (1.0 - x)) )
+                                        output_transform=lambda x, u: u * x * (1.0 - x) + 1.0 )
 
         self.collect_trainable_param()
         self.D_eval = None
@@ -216,6 +216,7 @@ class PoiVarProblem(BaseProblem):
         u = nn(x)
 
         D = nn.D_eval
+        
         u_x = torch.autograd.grad(u, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(u))[0]
         dxDux = torch.autograd.grad(D*u_x, x,
@@ -273,11 +274,29 @@ class PoiVarProblem(BaseProblem):
         res, pred = self.residual(net, self.dataset['x_res_train'])
         return res, pred
     
+    def get_l2gradD(self, net):
+        # estimate l2 norm of u, 1/N \sum u^2
+        
+        x = self.dataset['x_res_train']
+        D = net.func_param(x)
+        D_x = torch.autograd.grad(D, x,
+            create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(D))[0]
+        return torch.mean(torch.square(D_x))
+    
     def get_data_loss(self, net):
         # get data loss
         u_pred = net(self.dataset['x_dat_train'])
         loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))        
         return loss
+
+    def get_l2norm(self, net):
+        # estimate l2 norm of u, 1/N \sum u^2
+        u_pred = net(self.dataset['x_res_train'])
+        loss = torch.mean(torch.square(u_pred))
+        return loss
+
+    
+
     
 
     def create_dataset_from_pde(self, dsopt):

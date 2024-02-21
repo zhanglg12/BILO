@@ -31,8 +31,10 @@ class lossCollection:
         'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
         'bc': self.bcloss,'funcloss':self.funcloss,
         'resgradfunc': self.resgradfuncloss,
-        'l2reg': self.l2regloss,
-        'netdata': self.netdataloss}
+        'l2weight': self.l2weightloss,
+        'l2norm': self.l2normloss,
+        'netdata': self.netdataloss,
+        'l2grad': self.l2gradloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -55,12 +57,18 @@ class lossCollection:
         val_loss_res = mse(self.res)
         return val_loss_res
     
-    def l2regloss(self):
+    def l2weightloss(self):
         # l2 regularization of pde parameter
         # only used for function case.
         all_params = torch.cat([p.view(-1) for p in self.net.param_pde_trainable])
 
         return torch.sum(torch.pow(all_params, 2))
+    
+    def l2normloss(self):
+        return self.pde.get_l2norm(self.net)
+    
+    def l2gradloss(self):
+        return self.pde.get_l2gradD(self.net)
         
 
     def resgradfuncloss(self):
