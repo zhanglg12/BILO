@@ -60,12 +60,12 @@ default_opts = {
     
     'dataset_opts': {
         'N_res_train': 101,
-        'N_bc_train':101,
         'N_res_test': 101,
         'N_dat_train': 101,
         'N_dat_test': 101,
 
         # for heat problem
+        'N_ic_train':101, # point for evaluating l2grad
         'Nx':51,
         'Nt':51,
     },

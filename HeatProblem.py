@@ -187,6 +187,16 @@ class HeatProblem(BaseProblem):
         loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
         
         return loss
+    
+    def get_l2grad(self, net):
+        # estimate l2 norm of u, 1/N \sum u^2
+        x = self.dataset['x_ic_train']
+        x.requires_grad_(True)
+        
+        D = net.func_param(x)
+        D_x = torch.autograd.grad(D, x,
+            create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(D))[0]
+        return torch.mean(torch.square(D_x))
 
     def setup_network(self, **kwargs):
         '''setup network, get network structure if restore'''
@@ -218,13 +228,14 @@ class HeatProblem(BaseProblem):
         # create dataset from pde using datset option and noise option
         dataset = DataSet()
 
+        N = 1001 # resolution of t and x from provided exact solution
         Nt = dsopt['Nt']
         Nx = dsopt['Nx']
         dataset['Nt'] = Nt
         dataset['Nx'] = Nx
         
-        t = np.linspace(0, 1, 1001).reshape(-1, 1)
-        x = np.linspace(0, 1, 1001).reshape(-1, 1)
+        t = np.linspace(0, 1, N).reshape(-1, 1)
+        x = np.linspace(0, 1, N).reshape(-1, 1)
         # X are Nx by Nt, first dimension is t, second dimension is x
         X,T = np.meshgrid(x,t)
         u = self.u_exact(T, X)
@@ -232,12 +243,23 @@ class HeatProblem(BaseProblem):
         # for testing and plotting
         dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(T, X, u)
 
+        X_dat = np.column_stack((T[-1, :].reshape(-1, 1), X[-1, :].reshape(-1, 1)))
+        u_dat = u[-1, :].reshape(-1, 1)
+        idx = np.linspace(0, N-1, dsopt['N_dat_train'], dtype=int)
+        dataset['X_dat_train'] = X_dat[idx, :]
+        dataset['u_dat_train'] = u_dat[idx, :]
+
+        
+        idx = np.linspace(0, N-1, dsopt['N_ic_train'], dtype=int)
+        dataset['x_ic_train'] = gx[-1, :].reshape(-1, 1)[idx, :]
+        dataset['u_ic_train'] = u[0, :].reshape(-1, 1)[idx, :]
+
+
         # for training
         gt, gx, u = self.griddata_subsample(T, X, u, Nt, Nx)
-        dataset['X_res_train'], dataset['u_res_train'], dataset['X_dat_train'], dataset['u_dat_train'], dataset['x_ic_train'], dataset['u_ic_train'] = self.griddata_to_tensor(gt, gx, u)
+        dataset['X_res_train'], dataset['u_res_train'], _, _, _, _ = self.griddata_to_tensor(gt, gx, u)
 
         dataset.printsummary()
-
         self.dataset = dataset
     
     def griddata_subsample(self, gt, gx, u, Nt, Nx):
@@ -274,6 +296,8 @@ class HeatProblem(BaseProblem):
         
         uname = f'u{self.testcase}'
         icname = f'ic{self.testcase}'
+        
+        N = 1001
         # get data from file
         u = dataset[uname]
         gt = dataset['gt']
@@ -285,12 +309,25 @@ class HeatProblem(BaseProblem):
         dataset['Nt'] = Nt
         dataset['Nx'] = Nx
 
+        # for training X_dat, can be different from Nx
+        X_dat = np.column_stack((gt[-1, :].reshape(-1, 1), gx[-1, :].reshape(-1, 1)))
+        u_dat = u[-1, :].reshape(-1, 1)
+        idx = np.linspace(0, N-1, dsopt['N_dat_train'], dtype=int)
+        dataset['X_dat_train'] = X_dat[idx, :]
+        dataset['u_dat_train'] = u_dat[idx, :]
+
+        # for x_ic, can be different from Nx, used to evalute l2grad
+        idx = np.linspace(0, N-1, dsopt['N_ic_train'], dtype=int)
+        dataset['x_ic_train'] = gx[-1, :].reshape(-1, 1)[idx, :]
+        dataset['u_ic_train'] = u[0, :].reshape(-1, 1)[idx, :]
+
+
         # for testing and plotting
         dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(gt, gx, u)
 
         # for training
         gt, gx, u = self.griddata_subsample(gt, gx, u, Nt, Nx)
-        dataset['X_res_train'], dataset['u_res_train'], dataset['X_dat_train'], dataset['u_dat_train'], dataset['x_ic_train'], dataset['u_ic_train'] = self.griddata_to_tensor(gt, gx, u)
+        dataset['X_res_train'], dataset['u_res_train'],_, _, _, _ = self.griddata_to_tensor(gt, gx, u)
         
 
         dataset.printsummary()
@@ -406,8 +443,8 @@ class HeatProblem(BaseProblem):
         k = 0
         for i in tidx:
             # plot u at each t
-            ax.plot(u[i,:], label=f'Exact t={i/self.dataset["Nt"]:.2f}', color=C[k])
-            ax.plot(u_pred[i,:], label=f'NN t={i/self.dataset["Nt"]:.2f}', linestyle='--', color=C[k])
+            ax.plot(u[i,:], label=f'Exact t={i/1000:.2f}', color=C[k])
+            ax.plot(u_pred[i,:], label=f'NN t={i/1000:.2f}', linestyle='--', color=C[k])
             k += 1
         ax.legend(loc="best")
         ax.grid()
@@ -432,17 +469,17 @@ class HeatProblem(BaseProblem):
     
     def plot_sample(self, savedir=None):
         '''plot distribution of collocation points'''
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        ax[0].plot(self.dataset['X_res_train'][:, 1], self.dataset['X_res_train'][:, 0], 'o', label='X_res_train')
-        ax[1].plot(self.dataset['X_dat_train'][:, 1], self.dataset['X_dat_train'][:, 0], 'o', label='X_dat_train')
+        fig, ax = plt.subplots()
+        ax.scatter(self.dataset['X_res_train'][:, 1], self.dataset['X_res_train'][:, 0], s=2.0, marker='.', label='X_res_train')
+        ax.scatter(self.dataset['X_dat_train'][:, 1], self.dataset['X_dat_train'][:, 0], s=2.0, marker='s', label='X_dat_train')
+        zeros = np.zeros_like(self.dataset['x_ic_train'])
+        ax.scatter(self.dataset['x_ic_train'], zeros , s=2.0, marker='x', label='X_ic_train')
         # same xlim ylim
-        ax[0].set_xlim([-0.1, 1.1])
-        ax[0].set_ylim([-0.1, 1.1])
-        ax[1].set_xlim([-0.1, 1.1])
-        ax[1].set_ylim([-0.1, 1.1])
+        ax.set_xlim([-0.1, 1.1])
+        ax.set_ylim([-0.1, 1.1])
+        
         # legend
-        ax[0].legend(loc="best")
-        ax[1].legend(loc="best")
+        ax.legend(loc="best")
         if savedir is not None:
             path = os.path.join(savedir, 'fig_Xdist.png')
             plt.savefig(path, dpi=300, bbox_inches='tight')
@@ -468,7 +505,7 @@ if __name__ == "__main__":
 
 
     optobj = Options()
-    optobj.opts['pde_opts']['problem'] = 'HeatProblem'
+    optobj.opts['pde_opts']['problem'] = 'heat'
     optobj.opts['nn_opts']['with_func'] = True
     optobj.opts['pde_opts']['trainable_param'] = 'u0'
 

@@ -68,6 +68,10 @@ class PoiDenseNet(DenseNet):
         # set requires_grad to False
         for embedding_weights in self.param_embeddings.parameters():
             embedding_weights.requires_grad = False
+        
+        # fix embedding layer set embedding to identity
+        # self.param_embeddings['D'].weight.data.fill_(1.0)
+
 
     def embed_x(self, x):
         '''embed x to the input layer'''
@@ -276,7 +280,7 @@ class PoiVarProblem(BaseProblem):
         res, pred = self.residual(net, self.dataset['x_res_train'])
         return res, pred
     
-    def get_l2gradD(self, net):
+    def get_l2grad(self, net):
         # estimate l2 norm of u, 1/N \sum u^2
         
         x = self.dataset['x_res_train']

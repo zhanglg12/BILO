@@ -68,7 +68,7 @@ class lossCollection:
         return self.pde.get_l2norm(self.net)
     
     def l2gradloss(self):
-        return self.pde.get_l2gradD(self.net)
+        return self.pde.get_l2grad(self.net)
         
 
     def resgradfuncloss(self):
