@@ -57,7 +57,9 @@ default_opts = {
         'output_activation': 'softplus',
         'fsiren': False,
     },
-    
+    'scheduler_opts': {
+        'scheduler': 'constant',
+    },
     'dataset_opts': {
         'N_res_train': 101,
         'N_res_test': 101,

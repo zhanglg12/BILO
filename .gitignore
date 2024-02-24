@@ -11,4 +11,5 @@ PyTorch_LBFGS/
 __pycache__/
 torchnotes/
 torchreparam/
+bashscripts/
 

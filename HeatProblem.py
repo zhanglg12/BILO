@@ -331,6 +331,12 @@ class HeatProblem(BaseProblem):
         
 
         dataset.printsummary()
+
+        # remove redundant data
+        for i in range(10):
+            if i != self.testcase:
+                dataset.pop(f'u{i}',None)
+                dataset.pop(f'ic{i}',None)
         
 
     def setup_dataset(self, dsopt, noise_opt):

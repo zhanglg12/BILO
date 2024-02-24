@@ -72,7 +72,7 @@ class Trainer:
 
 
     
-    def config_train(self, traintype = 'basic'):
+    def config_train(self, traintype = 'basic', lr_options = None):
         self.traintype = traintype
 
         if traintype == 'fwd' or traintype == 'basic':
@@ -99,21 +99,8 @@ class Trainer:
             self.optimizer['allparam'] = self.optim(optim_param_group, amsgrad=True)
 
             # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer['allparam'], gamma=0.999)
-            T_max = self.opts['max_iter']
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer['allparam'], T_max=T_max, eta_min= self.opts['lr_pde']/10.0)
-            
+            T_max = self.opts['max_iter']            
             self.ftrain = self.train_simu
-        elif traintype == 'adj-bi':
-            # two optimizer, one for net, one for pde
-            optim_param_group = [
-                {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
-            ]
-            # all parameters
-            self.optimizer['allparam'] = self.optim(optim_param_group,amsgrad=True)
-            # only network parameter
-            self.optimizer['netparam'] = self.optim(self.net.param_net, lr=self.opts['lr_net'], amsgrad=True)
-            self.ftrain = self.train_bilevel
         elif traintype == 'adj-bi1opt':
             # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde
             optim_param_group = [
@@ -125,6 +112,16 @@ class Trainer:
             self.ftrain = self.train_bilevel_singleopt
         else :
             raise ValueError(f'train type {traintype} not supported')
+
+        if lr_options is None or lr_options['scheduler'] == 'constant':
+            # constant learning rate
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer['allparam'], lr_lambda=lambda epoch: 1)
+
+        elif lr_options['scheduler'] == 'cosine':
+            T_max = self.opts['max_iter']
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer['allparam'], T_max=T_max, eta_min= self.opts['lr_pde']/10.0)
+        else:
+            raise ValueError(f'learning rate scheduler {lr_options["scheduler"]} not supported')
 
     def train(self):
         # move to device
@@ -187,98 +184,9 @@ class Trainer:
 
             # 1 step of GD
             self.optimizer['allparam'].step()
-            # self.scheduler.step()
+            self.scheduler.step()
             epoch += 1
 
-
-    def train_bilevel(self):
-
-        def log_stat(wloss_comp, islower, epoch):
-            # log statistics
-            if epoch % self.opts['print_every'] == 0 or stophere:
-                self.logger.log_metrics(wloss_comp, step=epoch)
-                self.logger.log_metrics(self.net.params_dict, step=epoch)
-                self.logger.log_metrics({'lower':islower}, step=epoch)
-        epoch = 0
-        wloss_comp = {}
-
-        while True:
-
-            self.optimizer['allparam'].zero_grad()
-            self.optimizer['netparam'].zero_grad()
-            self.lossCollection.getloss()
-
-            loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
-
-            loss_upper = self.lossCollection.wloss_comp['data']
-
-            wloss_comp.update(self.lossCollection.wloss_comp)
-
-            wloss_comp['lowertot'] = loss_lower
-            wloss_comp['uppertot'] = loss_upper
-
-            # check early stopping
-            stophere = self.estop(wloss_comp['total'], self.net.params_dict, epoch)
-
-            log_stat(wloss_comp, 0, epoch)
-
-
-            if stophere:
-                break
-
-
-            ### lower level
-            epoch_lower = 0
-            while loss_lower > self.opts['tol_lower']:
-
-                # take gradient of residual loss w.r.t network parameter
-                self.set_grad(self.net.param_net, loss_lower)
-                
-                # throw error here, implement later
-                raise NotImplementedError('not implemented yet')
-
-                self.optimizer['netparam'].step()
-
-                epoch_lower += 1
-                epoch += 1
-
-                if epoch_lower == self.opts['max_iter_lower']:
-                    break
-                    
-                
-                # compute lower level loss
-                self.optimizer['netparam'].zero_grad()
-                self.lossCollection.getloss()
-
-                loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
-                
-                wloss_comp.update(self.lossCollection.wloss_comp)
-                wloss_comp['lowertot'] = loss_lower
-
-                log_stat(wloss_comp, 1, epoch)
-            ### end of lower level
-
-            if epoch_lower > 0:
-                # redo upper level loss, since lower level has changed the network
-                self.optimizer['allparam'].zero_grad()
-                self.lossCollection.getloss()
-                loss_upper = self.lossCollection.wloss_comp['data']
-                wloss_comp['uppertot'] = loss_upper
-                loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
-                wloss_comp['lowertot'] = loss_lower
-                log_stat(wloss_comp, 0, epoch)
-
-            # take gradient of data loss w.r.t pde parameter
-            self.set_grad(self.net.param_pde, loss_upper)
-            
-            # take gradient of residual loss w.r.t network parameter
-            loss_lower = self.lossCollection.get_wloss_sum(self.loss_net)
-            self.set_grad(self.net.param_net, loss_lower)
-            
-            # 1 step of GD for all net+pde params
-            self.optimizer['allparam'].step()
-            # next cycle
-            epoch += 1
     
     def train_bilevel_singleopt(self):
         # single optimizer for all parameters, change learning rate manually
@@ -374,6 +282,7 @@ class Trainer:
             
             # 1 step of GD for all net+pde params
             self.optimizer['allparam'].step()
+            self.scheduler.step() # only step for allparam
             # next cycle
             epoch += 1
 
@@ -389,6 +298,7 @@ class Trainer:
             self.lossCollection.getloss()
             self.lossCollection.wtotal.backward(retain_graph=True)
             self.optimizer['allparam'].step()
+            self.scheduler.step()
 
             # check early stopping
             stophere = self.estop(self.lossCollection.wtotal, self.net.params_dict, epoch)

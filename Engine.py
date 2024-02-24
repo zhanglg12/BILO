@@ -80,7 +80,7 @@ class Engine:
     def setup_trainer(self):
         self.lossCollection = lossCollection(self.net, self.pde, self.opts['weights'], self.opts['loss_opts'])
         self.trainer = Trainer(self.opts['train_opts'], self.net, self.pde, self.device, self.lossCollection, self.logger)
-        self.trainer.config_train(self.opts['traintype'])
+        self.trainer.config_train(self.opts['traintype'], self.opts['scheduler_opts'])
 
         if self.restore_artifacts:
             self.trainer.restore(self.restore_artifacts['artifacts_dir'])

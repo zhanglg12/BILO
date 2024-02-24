@@ -136,7 +136,12 @@ class DataSet(dict):
         for var in vars:
             self[var+'_train'] = self[var][idx]
             
-            
+    def remove(self, keys):
+        '''remove variables that contains substr
+        '''
+        for key in keys:
+            self.pop(key, None)
+            print(f'remove {key}')
     
 
 if __name__ == "__main__":
