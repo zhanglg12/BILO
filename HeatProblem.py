@@ -329,15 +329,13 @@ class HeatProblem(BaseProblem):
         gt, gx, u = self.griddata_subsample(gt, gx, u, Nt, Nx)
         dataset['X_res_train'], dataset['u_res_train'],_, _, _, _ = self.griddata_to_tensor(gt, gx, u)
         
-
-        dataset.printsummary()
-
         # remove redundant data
         for i in range(10):
             if i != self.testcase:
                 dataset.pop(f'u{i}',None)
                 dataset.pop(f'ic{i}',None)
         
+        dataset.printsummary()
 
     def setup_dataset(self, dsopt, noise_opt):
         '''add noise to dataset'''

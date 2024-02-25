@@ -113,7 +113,7 @@ class DataSet(dict):
         N = self[vars[0]].shape[0]
         step = (N-1)//(n-1)
         for var in vars:
-            self[var+'_train'] = self[var][::step]
+            self[var+'_train'] = self[var][::step,:]
     
     def filter(self, substr):
         ''' return list of key that contains substr

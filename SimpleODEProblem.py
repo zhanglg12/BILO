@@ -1,5 +1,7 @@
+#!/usr/bin/env python
 # define problems for PDE
 import torch
+import os
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
@@ -8,18 +10,6 @@ from BaseProblem import BaseProblem
 from DataSet import DataSet
 from util import generate_grf, add_noise
 
-
-
-
-'''
-simple ode for testing
-https://tutorial.math.lamar.edu/Classes/DE/RealEigenvalues.aspx
-Example 4
-x' = [-5 1;4 -2]x x(0) = [1;2]
-x1 = 3/5 e^(-t)   + 2/5 e^(-6t)
-x2 = 3/5 e^(-t) 4 - 2/5 e^(-6t)
-assume A11 unkonwn
-'''
 
 ''' 
 Based on Supporting Information for:
@@ -45,22 +35,21 @@ class SimpleODEProblem(BaseProblem):
         self.dataset = DataSet(kwargs['datafile'])
         # get parameter from mat file
         self.param = {}
-        self.param['a11'] = self.dataset['A'][0,0]
-        self.param['a12'] = self.dataset['A'][0,1]
-        self.param['a21'] = self.dataset['A'][1,0]
-        self.param['a22'] = self.dataset['A'][1,1]
+        Aname = f'A{kwargs["testcase"]}'
+        self.param['a11'] = self.dataset[Aname][0,0]
+        self.param['a12'] = self.dataset[Aname][0,1]
+        self.param['a21'] = self.dataset[Aname][1,0]
+        self.param['a22'] = self.dataset[Aname][1,1]
+        self.testcase = kwargs['testcase']
         self.p = self.dataset['p']
         self.y0 = self.dataset['y0']
-
-        # tag for plotting, ode: plot component, 2d: plot traj, exact: have exact solution
-        self.tag = ['ode','2d']
         
         y0 = torch.tensor(self.y0)
         
         # this allow u0 follow the device of Neuralnet
-        self.output_transform = torch.nn.Module()
-        self.output_transform.register_buffer('u0', y0)
-        self.output_transform.forward = lambda x, u: self.output_transform.u0 + u*x
+        self.lambda_transform = torch.nn.Module()
+        self.lambda_transform.register_buffer('u0', y0)
+        self.lambda_transform.forward = lambda x, u: self.lambda_transform.u0 + u*x
 
 
     def residual(self, nn, x):
@@ -93,7 +82,7 @@ class SimpleODEProblem(BaseProblem):
         print(f'y0 = {self.y0}')
 
 
-    def solve_ode(self, param, tend = 1.0, num_points=1000, t_eval=None):
+    def solve_ode(self, param, tend = 1.0, num_points=1001, t_eval=None):
         """
         Solves the ODE using Scipy's solve_ivp with high accuracy.
         
@@ -124,58 +113,149 @@ class SimpleODEProblem(BaseProblem):
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html#scipy.integrate.solve_ivp
         sol = solve_ivp(ode_system, t_span, y0, t_eval=t_eval, method='DOP853', rtol=1e-9, atol=1e-9)
 
-        return sol
-    
-    def plot_sol(self, ax, t, X, tag=''):
-        t = t
-        x = X[0]
-        y = X[1]
-
-        if ax is None:
-            fig , ax = plt.subplots()
-        else:
-            fig = ax.get_figure()
-
-        ax.plot(t, x, label=f'x(t) {tag}')
-        ax.plot(t, y, label=f'y(t) {tag}')
-        ax.set_xlabel('t')
-        ax.set_ylabel('coordinate')
-        ax.set_title('X(t)')
-        ax.grid(True)
-        ax.legend()
-
-        return fig, ax
-    
-    def plot_traj(self, ax, X, tag):
-        x = X[0]
-        y = X[1]
-
-        if ax is None:
-            fig , ax = plt.subplots()
-        else:
-            fig = ax.get_figure()
-
-        ax.plot(x, y, label=f'X(t) {tag}')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_title('trajectory')
-        ax.grid(True)
-        ax.legend()
-
-        return fig, ax
+        # sol.y is (2, n) array, n is number of time points
+        return sol.y.T 
 
     def setup_dataset(self, dsopt, noise_opt):
         # data loss
-        if dsopt['N_dat_train'] < self.dataset['x_dat_train'].shape[0]:
-            print('downsample training data')
-            self.dataset.uniform_downsample(dsopt['N_dat_train'], ['x_dat_train','u_dat_train'])
-        
-        if dsopt['N_res_train'] < self.dataset['x_res_train'].shape[0]:
-            print('downsample residual data')
-            self.dataset.uniform_downsample(dsopt['N_res_train'], ['x_res_train'])
+        self.create_dataset_from_file(dsopt)
 
         if noise_opt['use_noise']:
             print('add noise to training data')
             add_noise(self.dataset, noise_opt)
 
     
+    def create_dataset_from_file(self, dsopt):
+        '''create dataset from file'''
+        assert self.dataset is not None, 'datafile provide, dataset should not be None'
+        Aname = f'A{self.testcase}'
+        uname = f'u{self.testcase}'
+
+    
+        self.dataset['x_dat'] = self.dataset['ts']
+        self.dataset['u_dat'] = self.dataset[uname]
+
+        self.dataset['x_res'] = self.dataset['ts']
+        self.dataset['u_res'] = self.dataset[uname]
+        
+        self.dataset.subsample_evenly_astrain(dsopt['N_res_train'], ['x_res', 'u_res'])
+        self.dataset.subsample_evenly_astrain(dsopt['N_dat_train'], ['x_dat', 'u_dat'])
+        
+        # remove other test case
+        for i in range(10):
+            if i != self.testcase:
+                self.dataset.pop(f'A{i}',None)
+                self.dataset.pop(f'u{i}',None)
+        
+        self.dataset.printsummary()
+
+    def make_prediction(self, net):
+        # make prediction at original X_dat and X_res
+        with torch.no_grad():
+            self.dataset['upred_res'] = net(self.dataset['x_res'], net.params_dict)
+            self.dataset['upred_dat'] = net(self.dataset['x_dat'], net.params_dict)
+            params = {k: v.item() for k, v in net.params_dict.items()}
+            self.dataset['ufdm_dat'] = self.solve_ode(params)
+
+    def plot_pred_comp(self, savedir=None):
+        ''' plot prediction at x_dat_train
+        '''
+
+        # scatter plot of training data, might be noisy
+        x_dat_train = self.dataset['x_dat_train']
+        u_dat_train = self.dataset['u_dat_train']
+
+        # line plot gt solution and prediction
+        u_test = self.dataset['u_dat']
+        upred = self.dataset['upred_dat']
+        x_dat = self.dataset['x_dat']
+
+        # visualize the results
+        fig, ax = plt.subplots()
+
+        # Get the number of dimensions
+        d = upred.shape[1]
+        # get color cycle
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        # Plot each dimension
+        for i in range(d):
+            color = color_cycle[i % len(color_cycle)]
+            coord = chr(120 + i)
+            ax.plot(x_dat, upred[:, i], label=f'pred {coord}', color=color)
+            ax.plot(x_dat, u_test[:, i], label=f'test {coord}', linestyle='--', color=color)
+            ax.scatter(x_dat_train, u_dat_train[:, i], label=f'train {coord}',color=color,marker='.')
+            if 'ufdm_dat' in self.dataset:
+                ax.plot(x_dat, self.dataset['ufdm_dat'][:, i], label=f'inf {coord}', linestyle=':', color=color)
+
+        ax.legend()
+
+        if savedir is not None:
+            fpath = os.path.join(savedir, 'fig_pred_comp.png')
+            fig.savefig(fpath, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {fpath}')
+
+        return fig, ax
+    
+    def plot_pred_traj(self, savedir=None):
+        ''' plot prediction at x_dat_train
+        '''
+
+        # scatter plot of training data, might be noisy
+        x_dat_train = self.dataset['x_dat_train']
+        u_dat_train = self.dataset['u_dat_train']
+
+        # line plot gt solution and prediction
+        u_test = self.dataset['u_dat']
+        upred = self.dataset['upred_dat']
+        x_dat = self.dataset['x_dat']
+
+        # visualize the results
+        fig, ax = plt.subplots()
+        ax.plot(upred[:, 0], upred[:, 1], label=f'pred')
+        ax.plot(u_test[:, 0], u_test[:, 1], label=f'gt')
+        ax.scatter(u_dat_train[:, 0], u_dat_train[:, 1], label=f'data')
+        if 'ufdm_dat' in self.dataset:
+            ax.plot(self.dataset['ufdm_dat'][:, 0],self.dataset['ufdm_dat'][:, 1], label=f'fdm')
+
+        ax.legend()
+
+        if savedir is not None:
+            fpath = os.path.join(savedir, 'fig_pred_traj.png')
+            fig.savefig(fpath, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {fpath}')
+
+        return fig, ax
+    
+    def visualize(self, savedir=None):
+        # visualize the results
+        self.dataset.to_np()
+        self.plot_pred_comp(savedir=savedir)
+        self.plot_pred_traj(savedir=savedir)
+
+
+
+
+if __name__ == "__main__":
+    import sys
+    from Options import *
+    from DenseNet import *
+    from Problems import *
+
+
+    optobj = Options()
+    optobj.opts['pde_opts']['problem'] = 'simpleode'
+
+    optobj.parse_args(*sys.argv[1:])
+    
+    
+    device = set_device('cuda')
+    set_seed(0)
+    
+    print(optobj.opts)
+
+    prob = SimpleODEProblem(**optobj.opts['pde_opts'])
+    pdenet = prob.setup_network(**optobj.opts['nn_opts'])
+    prob.setup_dataset(optobj.opts['dataset_opts'], optobj.opts['noise_opts'])
+
+    prob.make_prediction(pdenet)
+    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])

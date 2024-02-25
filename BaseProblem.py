@@ -48,7 +48,6 @@ class BaseProblem(ABC):
             if hasattr(self, 'u_exact'):
                 self.dataset['uinf_dat_test'] = self.u_exact(self.dataset['x_dat_test'], net.params_dict)
 
-
         self.prediction_variation(net)
 
     def setup_network(self, **kwargs):
