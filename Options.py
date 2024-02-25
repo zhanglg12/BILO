@@ -13,7 +13,7 @@ default_opts = {
                     'run_name':'test',
                     'save_dir':'tmp'},
     'restore': '',
-    'traintype': 'basic',
+    'traintype': 'vanilla-inv',
     'trainfcn':'', # init or inv
     'flags': '', 
     'device': 'cuda',
@@ -35,6 +35,7 @@ default_opts = {
         # for heat problem 0.1 and poisson problem
         'D': 0.1,
         'use_exact_u0':False,
+    
     },
     'gbm_opts': {
         'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
@@ -86,8 +87,8 @@ default_opts = {
         # for bi-level training
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
-        'loss_net':'res,fullresgrad,bc,netdata', # loss for network weights
-        'loss_pde':'data,l2norm,l2weight,l2grad', # loss for pde parameter
+        'loss_net':'res,fullresgrad,bc', # loss for network weights
+        'loss_pde':'data,l2grad', # loss for pde parameter
         'reset_optim':True, # reset optimizer state
         'whichoptim':'adam'
     },
@@ -101,12 +102,8 @@ default_opts = {
         'fullresgrad': 0.001,
         'resgradfunc': None,
         'data': 1.0,
-        'paramgrad': None,
         'bc':None,
         'funcloss':None, #mse of unknonw function
-        'l2weight': None,
-        'l2norm': None,
-        'netdata': None,
         'l2grad':None,
     },
     'loss_opts': {
@@ -206,7 +203,8 @@ class Options:
         self.opts = default_opts
     
     def parse_args(self, *args):
-
+        # first parse args and update dictionary
+        # then process dependent options
         self.parse_nest_args(*args)
         self.processing()
     
@@ -262,21 +260,26 @@ class Options:
             self.opts['logger_opts']['use_stdout'] = True
             self.opts['logger_opts']['use_csv'] = False
         
-        
-        if 'wunit' in self.opts['flags']:
-            # normalize data loss and res loss, for basic training
-            # this is for fair comparison with early stopping monitor the total loss
-            # may not be needed if traning for fixed number of iterations
-            assert self.opts['traintype'] == 'basic', 'wunit flag only valid for basic training'
-            wres = self.opts['weights']['res']
-            wdata = self.opts['weights']['data']
-            self.opts['weights']['res'] = wres/(wres+wdata)
-            self.opts['weights']['data'] = wdata/(wres+wdata)
-
         if 'fixiter' in self.opts['flags']:
             # fix number of iterations, do not use early stopping
             self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
     
+    def process_problem(self):
+        ''' handle problem specific options '''
+        if self.opts['pde_opts']['problem'] in {'poisson'}:
+            self.opts['pde_opts']['trainable_param'] = 'D'
+
+        if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
+            # merge func_opts to nn_opts, use function embedding
+            self.opts['nn_opts'].update(self.opts['func_opts'])
+            self.opts['nn_opts']['with_func'] = True
+        else:
+            # for scalar problem, can not use l2reg
+            self.opts['weights']['l2grad'] =  None
+            self.opts['nn_opts']['with_func'] = False
+        
+        del self.opts['func_opts']
+
     def processing(self):
         ''' handle dependent options '''
         if self.opts['flags'] != '':
@@ -287,37 +290,43 @@ class Options:
         
         self.process_flags()
 
-        # training type
+        self.process_problem()
+
+        # training type 
+        # vanilla-fwd, vanilla-inv
+        # adj-fwd, adj-inv
         # for vanilla PINN, nn does not include parameter
-        if self.opts['traintype'] == 'basic':
-            self.opts['weights']['resgrad'] = None
-            self.opts['weights']['fullresgrad'] = None
-            self.opts['nn_opts']['with_param'] = False
-            if self.opts['pde_opts']['trainable_param'] != '':
-                warnings.warn( 'trainable_param is empty for basic training')
+        assert self.opts['traintype'] in {'vanilla-inv','vanilla-init','adj-init', 'adj-simu', 'adj-bi1opt'}, 'invalid traintype'
         
-        if self.opts['traintype'] == 'fwd':
-            # for fwd problem, nn does not include parameter, no training on parameter
-            self.opts['nn_opts']['with_param'] = False
-            self.opts['weights']['resgrad'] = None
+        if self.opts['traintype'].startswith('vanilla'):
             self.opts['weights']['fullresgrad'] = None
-            self.opts['pde_opts']['trainable_param'] = ''
+            self.opts['nn_opts']['with_param'] = False
+
+            if self.opts['traintype'].endswith('init'):
+                # for vanilla training, all parameters are states in optimizer
+                # for init, require_grad is false,
+                # for inv, some require_grad is true
+                self.opts['pde_opts']['trainable_param'] = ''
             
-        
+
         if self.opts['traintype'].startswith('adj'):
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
 
-
-        if self.opts['trainfcn'] != '':
-            assert self.opts['trainfcn'] in {'init','inv'}, 'invalid trainfcn'
-            self.opts['nn_opts']['with_func'] = True
-            
-            if self.opts['trainfcn'] == 'init':
-                # for initialization, use mse to train unkonwn function
+        if self.opts['traintype'].endswith('init'):
+            if self.opts['nn_opts']['with_func']:
+                # use function embedding, use mse of function as loss to train param_func
+                # these set available loss, actuall loss is determined by weights
+                self.opts['train_opts']['loss_net'] = 'res,fullresgrad,data,bc'
+                self.opts['train_opts']['loss_pde']= 'funcloss'
                 self.opts['weights']['funcloss'] = 1.0
-                self.opts['train_opts']['loss_pde']= self.opts['train_opts']['loss_pde'].replace('data','funcloss')
-
+            else:
+                # for scalar problem
+                # these set available loss, actuall loss is determined by weights
+                # for init, loss_pde lr is 0.0
+                self.opts['train_opts']['loss_net'] = 'res,fullresgrad,data,bc'
+                self.opts['train_opts']['loss_pde'] = 'data'
+                self.opts['weights']['funcloss'] = None
 
         # convert to list of losses
         self.opts['train_opts']['loss_net'] = self.opts['train_opts']['loss_net'].split(',')
@@ -325,9 +334,9 @@ class Options:
         # remove inative losses (weight is None)
         self.opts['train_opts']['loss_net'] = [loss for loss in self.opts['train_opts']['loss_net'] if self.opts['weights'][loss] is not None]
         self.opts['train_opts']['loss_pde'] = [loss for loss in self.opts['train_opts']['loss_pde'] if self.opts['weights'][loss] is not None]
-
         
 
+        
         # After traintype is processed 
         # convert trainable param to list of string, split by ','
         if self.opts['pde_opts']['trainable_param'] != '':
@@ -339,40 +348,6 @@ class Options:
             self.opts['pde_opts']['init_param'] = self.convert_to_dict(self.opts['pde_opts']['init_param'])
 
 
-        if self.opts['pde_opts']['problem'] == 'heat':
-            self.opts['pde_opts']['trainable_param'] = ['u0']
-
-        # has to be after init_param is processed
-        # for poisson problem, set init_param and exact_param
-        if self.opts['pde_opts']['problem'] == 'poisson':
-            self.opts['pde_opts']['trainable_param'] = ['D']
-            if self.opts['traintype'] == 'basic':
-                self.opts['pde_opts']['exact_param'] = {'D':2.0}
-                self.opts['pde_opts']['init_param'] = {'D':1.0}
-            # init problem, use init D to gen data
-            if self.opts['traintype'] == 'adj-init':
-                self.opts['pde_opts']['exact_param'] = {'D':1.0}
-            # inverse problem, use exact D to gen data
-            if self.opts['traintype'] == 'adj-simu':
-                self.opts['pde_opts']['exact_param'] = {'D':2.0}
-        
-        if self.opts['pde_opts']['problem'] == 'gbm':
-            # merge gbm_opts to pde_opts
-            self.opts['pde_opts'].update(self.opts['gbm_opts'])
-            del self.opts['gbm_opts']
-        
-        if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
-            # merge func_opts to nn_opts
-            self.opts['nn_opts'].update(self.opts['func_opts'])
-        else:
-            # can not use l2reg
-            assert self.opts['weights']['l2reg'] is None, 'l2reg can not be used for this problem'
-        
-        del self.opts['func_opts']
-        
-        # check assumptions
-        # fullresgrad and resgradfunc can not both positive
-        assert not (self.opts['weights']['fullresgrad'] is not None and self.opts['weights']['resgradfunc'] is not None), 'fullresgrad and resgradfunc can not both positive'
 
 
 if __name__ == "__main__":

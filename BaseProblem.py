@@ -25,7 +25,7 @@ class BaseProblem(ABC):
     def residual(self, nn, x):
         pass
 
-    @abstractmethod
+    # compute validation statistics
     def validate(self, nn):
         pass
 
@@ -45,6 +45,9 @@ class BaseProblem(ABC):
         with torch.no_grad():
             self.dataset['upred_res_test'] = net(self.dataset['x_res_test'], net.params_dict)
             self.dataset['upred_dat_test'] = net(self.dataset['x_dat_test'], net.params_dict)
+            if hasattr(self, 'u_exact'):
+                self.dataset['uinf_dat_test'] = self.u_exact(self.dataset['x_dat_test'], net.params_dict)
+
 
         self.prediction_variation(net)
 
@@ -93,7 +96,7 @@ class BaseProblem(ABC):
                     u_test = net(x_test, net.params_dict)
                     u_pred_var_dict[param_name][delta]['pred'] = u_test
 
-                    if 'exact' in self.tag:
+                    if hasattr(self, 'u_exact'):
                         u_exact = self.u_exact(x_test, net.params_dict)
                         u_pred_var_dict[param_name][delta]['exact'] = u_exact
 
@@ -121,7 +124,7 @@ class BaseProblem(ABC):
                 ax.plot(x_test, u_pred, label=f'NN $\Delta${varname} = {delta:.2f}')
 
                 # plot exact if available
-                if 'exact' in self.tag:
+                if hasattr(self, 'u_exact'):
                     color = ax.lines[-1].get_color()
                     u_exact = self.dataset['u_pred_var'][varname][delta]['exact']
                     ax.plot(x_test, u_exact, label=f'exact $\Delta${varname} = {delta:.2f}',color=color,linestyle='--')
@@ -163,6 +166,8 @@ class BaseProblem(ABC):
             ax.plot(x_dat_test, upred[:, i], label=f'pred {coord}', color=color)
             ax.plot(x_dat_test, u_test[:, i], label=f'test {coord}', linestyle='--', color=color)
             ax.scatter(x_dat_train, u_dat_train[:, i], label=f'train {coord}',color=color,marker='.')
+            if 'uinf_dat_test' in self.dataset:
+                ax.plot(x_dat_test, self.dataset['uinf_dat_test'][:, i], label=f'inf {coord}', linestyle=':', color=color)
             # if 'ode' in self.tag:
             #     ax.plot(sol.t, sol.y[i], label=f'sol pred {coord}', linestyle=':', color=color)
 

@@ -30,6 +30,7 @@ class PoiDenseNet(DenseNet):
         output_activation = kwargs['output_activation']
         fsiren = kwargs['fsiren']
         
+        
         # override the embedding function, also enforce dirichlet boundary condition
         
         if GLOBTEST:

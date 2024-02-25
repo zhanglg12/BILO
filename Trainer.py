@@ -72,10 +72,11 @@ class Trainer:
 
 
     
-    def config_train(self, traintype = 'basic', lr_options = None):
+    def config_train(self, traintype = 'vanilla-inv', lr_options = None):
         self.traintype = traintype
 
-        if traintype == 'fwd' or traintype == 'basic':
+        if traintype == 'vanilla-init' or traintype == 'vanilla-inv':
+            # param_all include all parameters, including requires_grad = False (some pde parameter and embedding)
             self.optimizer['allparam'] = self.optim(self.net.param_all)
             self.ftrain = self.train_vanilla
 
@@ -97,9 +98,6 @@ class Trainer:
                 {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             self.optimizer['allparam'] = self.optim(optim_param_group, amsgrad=True)
-
-            # self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer['allparam'], gamma=0.999)
-            T_max = self.opts['max_iter']            
             self.ftrain = self.train_simu
         elif traintype == 'adj-bi1opt':
             # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde

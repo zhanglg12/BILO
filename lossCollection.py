@@ -28,12 +28,9 @@ class lossCollection:
 
         # collection of all loss functions
         self.loss_dict = {'res': self.resloss,
-        'fullresgrad': self.fullresgradloss, 'data': self.dataloss, 'paramgrad': self.paramgradloss,
+        'fullresgrad': self.fullresgradloss, 'data': self.dataloss,
         'bc': self.bcloss,'funcloss':self.funcloss,
         'resgradfunc': self.resgradfuncloss,
-        'l2weight': self.l2weightloss,
-        'l2norm': self.l2normloss,
-        'netdata': self.netdataloss,
         'l2grad': self.l2gradloss}
 
         self.loss_weight = {} # dict of active loss: weight
@@ -108,21 +105,9 @@ class lossCollection:
                 resgradmse += torch.sum(torch.pow(tmp, 2))
         
         return resgradmse/n
-
-    # to prevent derivative of u w.r.t. parameter to be 0
-    # for now, just fix the weight of the embedding.
-    def paramgradloss(self):
-        pass
-    #     # derivative of u w.r.t. D
-    #     # penalty term to keep away from 0
-    #     return torch.exp(-mse(self.u_D))
     
     def dataloss(self):
         # a little bit less efficient, u_pred is already computed in resloss
-        return self.pde.get_data_loss(self.net)
-    
-    def netdataloss(self):
-        # same as data loss, but is used for network weight
         return self.pde.get_data_loss(self.net)
     
     def bcloss(self):
@@ -136,7 +121,7 @@ class lossCollection:
     def getloss(self):
         # for each active loss, compute the loss and multiply with the weight
         losses = {}
-        weighted_sum = 0
+        weighted_sum = 0.0
         for key in self.loss_active:
             losses[key] = self.loss_weight[key] * self.loss_dict[key]()
             weighted_sum += losses[key]

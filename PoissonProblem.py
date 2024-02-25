@@ -15,15 +15,11 @@ class PoissonProblem(BaseProblem):
         super().__init__()
         self.input_dim = 1
         self.output_dim = 1
-        self.tag=['exact']
-        
         self.opts=kwargs
         # default 1
-        self.p = 1
+        self.p = kwargs.get('p', 1)
 
-        self.param = {'D': 2.0}
-        if kwargs.get('exact_param') is not None:
-            self.param['D'] = kwargs['exact_param']['D']
+        self.param = {'D': kwargs['D']}
 
         self.lambda_transform = lambda x, u: u * x * (1 - x)
 
@@ -72,6 +68,11 @@ class PoissonProblem(BaseProblem):
 
         self.dataset = dataset
 
+    def validate(self, nn):
+        '''compute err '''
+        with torch.no_grad():
+            err = torch.abs(nn.params_dict['D'] - self.param['D'])
+        return {'abserr': err}
 
     def setup_dataset(self, dsopt, noise_opt):
         '''add noise to dataset'''

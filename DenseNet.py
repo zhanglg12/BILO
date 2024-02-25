@@ -62,11 +62,7 @@ class DenseNet(nn.Module):
             for embedding_weights in self.param_embeddings.parameters():
                 embedding_weights.requires_grad = False
 
-        # for now, just one function
-        if self.with_func:
-            self.func_param = ParamFunction(fdepth=4, fwidth=32)
-            
-
+        
         # activation function
         if siren:
             self.act = torch.sin
@@ -89,7 +85,9 @@ class DenseNet(nn.Module):
             else:
                 param.requires_grad = True
         
-        self.collect_trainable_param()
+        # temporary solution, if with_func, this part will be overwritten, hence don run this part here
+        if self.with_func == False:
+            self.collect_trainable_param()
 
         
        
@@ -154,39 +152,21 @@ class DenseNet(nn.Module):
             x = torch.sin(2 * torch.pi * self.fflayer(x))
         x = self.input_layer(x)
 
-        # have to evaluate self.func_param(xcoord) inside the network
-        # otherwise self.func_param is not in the computation graph
-        if self.with_func is False:
-            assert params_dict is None, "have to eval f(x) inside the network"
         
         if self.with_param :
             # go through each parameter and do embedding
-            if self.with_func is False:
-                for name, param in params_dict.items():
-                        # expand the parameter to the same size as x
-                        self.params_expand[name] = param.expand(x.shape[0], -1)
-                        scalar_param_expanded = self.params_expand[name] # (batch, 1)
-                        param_embedding = self.param_embeddings[name](scalar_param_expanded)
-                        x += param_embedding
-            else:
-                # evaluted func_param at xcoord, then do embedding
-                # CAUTION: assuming only learning one function, therefore only self.func_param intead of a dict
-                for name in self.params_dict.keys():
-                    param_vector = self.func_param(xcoord)
-                    self.params_expand[name] = param_vector
-                    param_embedding = self.param_embeddings[name](param_vector)
-                    x += param_embedding
-    
+            for name, param in params_dict.items():
+                    # expand the parameter to the same size as x
+                    self.params_expand[name] = param.expand(x.shape[0], -1)
+                    scalar_param_expanded = self.params_expand[name] # (batch, 1)
+                    param_embedding = self.param_embeddings[name](scalar_param_expanded)
+                    x += param_embedding    
         else:
-            if self.with_func is False:
-                # for vanilla version, no parameter embedding
-                # copy params_dict to params_expand
-                for name, param in self.params_dict.items():
-                    self.params_expand[name] = params_dict[name]
-            else:
-                for name in self.params_dict.keys():
-                    self.params_expand[name] =  self.func_param(xcoord)
-
+            # for vanilla version, no parameter embedding
+            # copy params_dict to params_expand
+            for name, param in self.params_dict.items():
+                self.params_expand[name] = params_dict[name]
+            
         return x
         
     def forward(self, x, params_dict=None):
