@@ -201,3 +201,15 @@ def get_mem_stats():
         mem['mem_reserved_max'] = 0
 
     return mem
+
+def griddata_subsample(gt, gx, u, Nt, Nx):
+    '''downsample grid data'''
+    nt, nx = gt.shape
+    tidx = np.linspace(0, nt-1, Nt, dtype=int)
+    xidx = np.linspace(0, nx-1, Nx, dtype=int)
+
+    su = u[np.ix_(tidx, xidx)]
+    sgt = gt[np.ix_(tidx, xidx)]
+    sgx = gx[np.ix_(tidx, xidx)]
+
+    return sgt, sgx, su

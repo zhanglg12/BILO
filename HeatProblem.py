@@ -7,7 +7,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-from util import generate_grf, add_noise
+from util import generate_grf, add_noise,  griddata_subsample
 
 from BaseProblem import BaseProblem
 from DataSet import DataSet
@@ -113,45 +113,8 @@ class HeatProblem(BaseProblem):
         
         self.param = {'u0': 0.0}
 
-        self.dataset = None
-        if kwargs['datafile']:
-            self.dataset = DataSet(kwargs['datafile'])
-            self.D = self.dataset['D']
-
-    def u_exact(self, t, x):
-        if self.testcase == 0:
-            # exact solution E^(-D Pi^2 t) Sin[Pi x]
-            return np.sin(np.pi  * x) * np.exp(-np.pi**2 * self.D * t)
-        
-        if self.testcase == 1:
-            # halfe of testcase 0
-            # exact solution E^(-D Pi^2 t) Sin[Pi x] /2
-            return np.sin(np.pi  * x) * np.exp(-np.pi**2 * self.D * t) / 2.0
-
-        elif self.testcase == 2:
-            # inifite serie
-            # C = -16/pi^3
-            # sum_n=1^inf C (-1+(-1)^n) Sin[n pi x] E^(-D n^2 pi^2 t)/n^3
-            # truncate to 100 terms
-            C = -16/np.pi**3
-            u = 0
-            for n in range(1, 101):
-                u += C * (-1 + (-1)**n) * np.sin(n * np.pi * x) * np.exp(-self.D * n**2 * np.pi**2 * t) / n**3
-            return u
-        else:
-            raise ValueError('Invalid testcase')
-        
-    def u0_exact(self, x):
-        if self.testcase == 0:
-            # initial condition Sin[Pi x]
-            return np.sin(np.pi  * x)
-        elif self.testcase == 1:
-            return np.sin(np.pi  * x) / 2.0
-        elif self.testcase == 2:
-            # initial condition 4 x (1 - x)
-            return 4 * x * (1 - x)
-        else:
-            raise ValueError('Invalid testcase')
+        self.dataset = DataSet(kwargs['datafile'])
+        self.D = self.dataset['D']
     
     def residual(self, nn, X_in):
         
@@ -224,55 +187,8 @@ class HeatProblem(BaseProblem):
         for k,v in self.param.items():
             print(f'{k} = {v}')
     
-    def create_dataset_from_pde(self, dsopt):
-        # create dataset from pde using datset option and noise option
-        dataset = DataSet()
 
-        N = 1001 # resolution of t and x from provided exact solution
-        Nt = dsopt['Nt']
-        Nx = dsopt['Nx']
-        dataset['Nt'] = Nt
-        dataset['Nx'] = Nx
-        
-        t = np.linspace(0, 1, N).reshape(-1, 1)
-        x = np.linspace(0, 1, N).reshape(-1, 1)
-        # X are Nx by Nt, first dimension is t, second dimension is x
-        X,T = np.meshgrid(x,t)
-        u = self.u_exact(T, X)
-
-        # for testing and plotting
-        dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(T, X, u)
-
-        X_dat = np.column_stack((T[-1, :].reshape(-1, 1), X[-1, :].reshape(-1, 1)))
-        u_dat = u[-1, :].reshape(-1, 1)
-        idx = np.linspace(0, N-1, dsopt['N_dat_train'], dtype=int)
-        dataset['X_dat_train'] = X_dat[idx, :]
-        dataset['u_dat_train'] = u_dat[idx, :]
-
-        
-        idx = np.linspace(0, N-1, dsopt['N_ic_train'], dtype=int)
-        dataset['x_ic_train'] = gx[-1, :].reshape(-1, 1)[idx, :]
-        dataset['u_ic_train'] = u[0, :].reshape(-1, 1)[idx, :]
-
-
-        # for training
-        gt, gx, u = self.griddata_subsample(T, X, u, Nt, Nx)
-        dataset['X_res_train'], dataset['u_res_train'], _, _, _, _ = self.griddata_to_tensor(gt, gx, u)
-
-        dataset.printsummary()
-        self.dataset = dataset
     
-    def griddata_subsample(self, gt, gx, u, Nt, Nx):
-        '''downsample grid data'''
-        nt, nx = gt.shape
-        tidx = np.linspace(0, nt-1, Nt, dtype=int)
-        xidx = np.linspace(0, nx-1, Nx, dtype=int)
-
-        su = u[np.ix_(tidx, xidx)]
-        sgt = gt[np.ix_(tidx, xidx)]
-        sgx = gx[np.ix_(tidx, xidx)]
-
-        return sgt, sgx, su
 
     def griddata_to_tensor(self, gt, gx, u):
         '''convert grid data to tensor for training'''
@@ -326,7 +242,7 @@ class HeatProblem(BaseProblem):
         dataset['X_res'], dataset['u_res'], dataset['X_dat'], dataset['u_dat'], dataset['x_ic'], dataset['u_ic'] = self.griddata_to_tensor(gt, gx, u)
 
         # for training
-        gt, gx, u = self.griddata_subsample(gt, gx, u, Nt, Nx)
+        gt, gx, u = griddata_subsample(gt, gx, u, Nt, Nx)
         dataset['X_res_train'], dataset['u_res_train'],_, _, _, _ = self.griddata_to_tensor(gt, gx, u)
         
         # remove redundant data
@@ -339,10 +255,8 @@ class HeatProblem(BaseProblem):
 
     def setup_dataset(self, dsopt, noise_opt):
         '''add noise to dataset'''
-        if self.dataset is None:
-            self.create_dataset_from_pde(dsopt)
-        else:
-            self.create_dataset_from_file(dsopt)
+        
+        self.create_dataset_from_file(dsopt)
         
         self.dataset.to_torch()
 
