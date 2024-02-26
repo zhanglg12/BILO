@@ -69,6 +69,7 @@ default_opts = {
 
         # for heat problem
         'N_ic_train':101, # point for evaluating l2grad
+        # for heat and FK problem
         'Nx':51,
         'Nt':51,
     },

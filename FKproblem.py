@@ -1,10 +1,11 @@
-# define problems for PDE
+#!/usr/bin/env python
+# # define problems for PDE
 import torch
 from DataSet import DataSet
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-from util import generate_grf
+from util import generate_grf, griddata_subsample
 from BaseProblem import BaseProblem
     
 class FKproblem(BaseProblem):
@@ -15,18 +16,16 @@ class FKproblem(BaseProblem):
         self.opts=kwargs
 
         self.dataset = DataSet(kwargs['datafile'])
-        # get parameter from mat file
-        # check empty string
-        self.param = {}
-        if kwargs['datafile']:
-            self.param['rD'] = self.dataset['rD']
-            self.param['rRHO'] = self.dataset['rRHO']
-            self.D = self.dataset['D']
-            self.RHO = self.dataset['RHO']
-        else:
-            # error
-            raise ValueError('no dataset provided for FKproblem')
+        self.D = self.dataset['D']
+        self.RHO = self.dataset['RHO']
+
+        self.testcase = kwargs['testcase']
         
+        self.param = {}
+        self.param['rD'] = self.dataset[f'rD{self.testcase}']
+        self.param['rRHO'] = self.dataset[f'rRHO{self.testcase}']
+
+        # use residual point for data loss
         self.use_res = kwargs['use_res']
 
         # ic, u(x) = 0.5*sin(pi*x)^2
@@ -34,11 +33,10 @@ class FKproblem(BaseProblem):
         # transform: u(x,t) = u0(x) + u_NN(x,t) * x * (1-x) * t
         self.lambda_transform = lambda X, u: (0.5 * torch.sin(np.pi * X[:,1:2]) ** 2)+ u * X[:,1:2] * (1 - X[:,1:2]) * X[:,0:1]
 
-        self.dataset['X_res'].requires_grad_(True)  
-
 
 
     def residual(self, nn, X):
+        X.requires_grad_(True)
 
         t = X[:, 0:1]
         x = X[:, 1:2]
@@ -73,12 +71,8 @@ class FKproblem(BaseProblem):
     
     def get_data_loss(self, net):
         # get data loss
-        if self.use_res:
-            u_pred = net(self.dataset['X_res_train'],net.params_dict)
-            loss = torch.mean(torch.square(u_pred - self.dataset['u_res_train']))
-        else:
-            u_pred = net(self.dataset['X_dat_train'],net.params_dict)
-            loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
+        u_pred = net(self.dataset['X_dat_train'],net.params_dict)
+        loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
         
         return loss
     
@@ -131,23 +125,59 @@ class FKproblem(BaseProblem):
 
         ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['u_dat_train'], fname = 'fig_u_dat_train.png', savedir=savedir)
 
+        self.plot_upred_dat(savedir=savedir)
+        self.plot_sample(savedir=savedir)
+
+    def create_dataset_from_file(self, dsopt):
+        dataset = self.dataset
+        
+        uname = f'u{self.testcase}'
+
+        u = dataset[uname]
+        gt = dataset['gt']
+        gx = dataset['gx']
+        Nt_full, Nx_full = u.shape
+        
+        # downsample size
+        Nt = dsopt['Nt']
+        Nx = dsopt['Nx']
+        dataset['Nt'] = Nt
+        dataset['Nx'] = Nx
+
+        # collect X and u from final time
+        X_dat = np.column_stack((gt[-1, :].reshape(-1, 1), gx[-1, :].reshape(-1, 1)))
+        u_dat = u[-1, :].reshape(-1, 1)
+        dataset['X_dat'] = X_dat
+        dataset['u_dat'] = u_dat
+        # downsample for training
+        idx = np.linspace(0, Nx_full-1, dsopt['N_dat_train'], dtype=int)
+        dataset['X_dat_train'] = X_dat[idx, :]
+        dataset['u_dat_train'] = u_dat[idx, :]
+
+
+        # collect X and u from all time, for residual loss
+        dataset['X_res'] = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
+        dataset['u_res'] = u.reshape(-1, 1)
+
+        # for training, downsample griddata and vectorize
+        gt, gx, u = griddata_subsample(gt, gx, u, Nt, Nx)
+        dataset['X_res_train'] = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
+        dataset['u_res_train'] = u.reshape(-1, 1)
+        
+        # remove redundant data
+        for i in range(10):
+            if i != self.testcase:
+                dataset.pop(f'u{i}',None)
+                dataset.pop(f'ic{i}',None)
+        
+        dataset.printsummary()
+        
+
     def setup_dataset(self, ds_opts, noise_opts=None):
         ''' downsample for training'''
         
-        # data loss
-        ndat_train = min(ds_opts['N_dat_train'], self.dataset['X_dat'].shape[0])
-        ds_opts['N_dat_train'] = ndat_train #update the number of training data if downsampled
-        vars = self.dataset.filter('_dat')
-        self.dataset.subsample_unif_astrain(ndat_train, vars)
-        print('unif downsample ', vars, ' to ', ndat_train)
-
-        # res loss
-        nres_train = min(ds_opts['N_res_train'], self.dataset['X_res'].shape[0])
-        ds_opts['N_res_train'] = nres_train #update the number of training data if downsampled
-        vars = self.dataset.filter('_res')
-        self.dataset.subsample_unif_astrain(nres_train, vars)
-        print('unif downsample ', vars, ' to ', nres_train)
-
+        self.create_dataset_from_file(ds_opts)
+        self.dataset.to_torch()
 
         if noise_opts['use_noise']:
             print('add noise to training data')
@@ -159,6 +189,62 @@ class FKproblem(BaseProblem):
 
             self.dataset['noise'] = noise
             self.dataset['u_dat_train'] = self.dataset['u_dat_train'] + self.dataset['noise']
-            
 
+    def plot_upred_dat(self, savedir=None):
+        fig, ax = plt.subplots()
+        x = self.dataset['X_dat'][:, 1]
+        x_train = self.dataset['X_dat_train'][:, 1]
+        ax.plot(x, self.dataset['u_dat'], label='exact')
+        ax.plot(x, self.dataset['upred_dat'], label='NN')
+        ax.scatter(x_train, self.dataset['u_dat_train'], label='data')
+        ax.legend(loc="best")
+        ax.grid()
+        if savedir is not None:
+            path = os.path.join(savedir, 'fig_upred_xdat.png')
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {path}')
+
+    def plot_sample(self, savedir=None):
+        '''plot distribution of collocation points'''
+        fig, ax = plt.subplots()
+        ax.scatter(self.dataset['X_res_train'][:, 1], self.dataset['X_res_train'][:, 0], s=2.0, marker='.', label='X_res_train')
+        ax.scatter(self.dataset['X_dat_train'][:, 1], self.dataset['X_dat_train'][:, 0], s=2.0, marker='s', label='X_dat_train')
+        # same xlim ylim
+        ax.set_xlim([-0.1, 1.1])
+        ax.set_ylim([-0.1, 1.1])
+        
+        # legend
+        ax.legend(loc="best")
+        if savedir is not None:
+            path = os.path.join(savedir, 'fig_Xdist.png')
+            plt.savefig(path, dpi=300, bbox_inches='tight')
+            print(f'fig saved to {path}')
+
+
+if __name__ == "__main__":
+    import sys
+    from Options import *
+    from DenseNet import *
+    from Problems import *
+
+
+    optobj = Options()
+    optobj.opts['pde_opts']['problem'] = 'fk'
+    optobj.opts['pde_opts']['trainable_param'] = 'rD,rRHO'
+
+
+    optobj.parse_args(*sys.argv[1:])
     
+    
+    device = set_device('cuda')
+    set_seed(0)
+    
+    print(optobj.opts)
+
+    prob = FKproblem(**optobj.opts['pde_opts'])
+    pdenet = prob.setup_network(**optobj.opts['nn_opts'])
+    prob.setup_dataset(optobj.opts['dataset_opts'], optobj.opts['noise_opts'])
+
+    prob.make_prediction(pdenet)
+    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
+
