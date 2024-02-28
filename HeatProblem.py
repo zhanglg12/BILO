@@ -97,6 +97,24 @@ class HeatDenseNet(DenseNet):
 
         u = self.output_transform(x, u)
         return u
+    
+    def variation(self, x, z):
+        '''variation of u w.r.t u0
+        '''
+        # Need to update the params_expand['u0'] to z for both with_param=True and False
+        # 
+        self.params_expand['u0'] = z
+
+        if self.with_param:
+            x_embed = self.embed_x(x)
+            z_embed = self.param_embeddings['u0'](z)
+            X = x_embed + z_embed
+        else:
+            X = self.embed_x(x)
+
+        u = self.embedding_to_u(X)
+        u = self.output_transform(x, u)
+        return u
 
   
 class HeatProblem(BaseProblem):
@@ -279,6 +297,7 @@ class HeatProblem(BaseProblem):
             self.dataset['upred_dat'] = net(self.dataset['X_dat'])
             self.dataset['upred_ic'] = net.func_param(self.dataset['x_ic'])
         
+        self.prediction_variation(net)
 
     def validate(self, nn):
         '''compute l2 error and linf error of inferred D(x)'''
@@ -403,6 +422,54 @@ class HeatProblem(BaseProblem):
             plt.savefig(path, dpi=300, bbox_inches='tight')
             print(f'fig saved to {path}')
 
+    def prediction_variation(self, net):
+        # make prediction with different parameters
+        X = self.dataset['X_dat']
+        
+        # first variation, D+0.1
+        funs = {}
+        u0 = lambda x: torch.sin(torch.pi * x)
+        funs['plus']= lambda x: u0(x) + 0.1 * u0(x)
+        funs['minus']= lambda x: u0(x) - 0.1 * u0(x)
+        funs['left']= lambda x: torch.sin(torch.pi * x + x *(1-x))
+
+        for funkey, fun in funs.items():
+            # replace parameter
+            with torch.no_grad():
+                z = fun(X[:, 1:2])
+                u = net.variation(X, z )
+                
+            key = f'uvar_{funkey}_dat'
+            var = f'icvar_{funkey}_dat'
+            self.dataset[key] = u
+            self.dataset[var] = z
+    
+    def plot_variation(self, savedir=None):
+        # go through uvar and var
+        def get_funkey(key):
+            return key.split('_')[1]
+            
+        for ukey in self.dataset.keys():
+            if ukey.startswith('uvar'):
+                fig, ax = plt.subplots(2,1)
+
+                funkey = get_funkey(ukey)
+                ickey = ukey.replace('uvar', 'icvar')
+                # plot u
+                ax[0].plot(self.dataset['X_dat'][:,1], self.dataset['u_dat'], label='u')
+                ax[0].plot(self.dataset['X_dat'][:,1], self.dataset[ukey], label=f'u-{funkey}')
+                ax[0].legend(loc="best")
+                # plot var, icvar is evaluated at X_dat,
+                # but u_ic is provided at x_ic
+                ax[1].plot(self.dataset['x_ic'], self.dataset['u_ic'], label='ic')
+                ax[1].plot(self.dataset['X_dat'][:,1], self.dataset[ickey], label=f'ic-{funkey}')
+                ax[1].legend(loc="best")
+
+                if savedir is not None:
+                    path = os.path.join(savedir, f'fig_var_{funkey}.png')
+                    plt.savefig(path, dpi=300, bbox_inches='tight')
+                    print(f'fig saved to {path}')
+    
     def visualize(self, savedir=None):
         '''visualize the problem'''
         self.plot_upred_res_meshgrid(savedir=savedir)
@@ -410,6 +477,7 @@ class HeatProblem(BaseProblem):
         self.plot_upred_dat(savedir=savedir)
         self.plot_ic_pred(savedir=savedir)
         self.plot_sample(savedir=savedir)
+        self.plot_variation(savedir=savedir)
                             
         
         

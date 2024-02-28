@@ -423,8 +423,8 @@ class PoiVarProblem(BaseProblem):
                 ax[0].legend(loc="best")
                 # plot var
                 
-                ax[1].plot(self.dataset['x_dat'], self.dataset[Dkey], label=funkey)
                 ax[1].plot(self.dataset['x_dat'], self.dataset['D_dat'], label='D')
+                ax[1].plot(self.dataset['x_dat'], self.dataset[Dkey], label=funkey)
                 ax[1].legend(loc="best")
 
                 if savedir is not None:
