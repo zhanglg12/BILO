@@ -51,10 +51,7 @@ class Engine:
         '''
         self.opts['nn_opts'].update(restore_opts['nn_opts'])
         
-        if self.opts['traintype'] != 'adj-init' and restore_opts['traintype'] == 'adj-init':
-            # going from adj-init to other 
-            # same weight, different trainable parameter
-            self.opts['weights'].update(restore_opts['weights'])
+        
 
     def restore_run(self):
         # actual restore is called in setup_lossCollection, need to known collection of trainable parameters

@@ -294,9 +294,10 @@ class Options:
     
     def process_problem(self):
         ''' handle problem specific options '''
+        
         if self.opts['pde_opts']['problem'] in {'poisson'}:
             self.opts['pde_opts']['trainable_param'] = 'D'
-
+        
         if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
             # merge func_opts to nn_opts, use function embedding
             self.opts['nn_opts'].update(self.opts['func_opts'])
@@ -305,6 +306,14 @@ class Options:
             # for scalar problem, can not use l2reg
             self.opts['weights']['l2grad'] =  None
             self.opts['nn_opts']['with_func'] = False
+        
+
+        # Need to specify trainable_param, which is used in fullresgrad loss
+        if self.opts['pde_opts']['problem'] in {'heat'}:
+            self.opts['pde_opts']['trainable_param'] = 'u0'
+        
+        if self.opts['pde_opts']['problem'] in {'poivar'}:
+            self.opts['pde_opts']['trainable_param'] = 'D'
         
         del self.opts['func_opts']
 
