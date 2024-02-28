@@ -80,36 +80,23 @@ class Trainer:
             self.optimizer['allparam'] = self.optim(self.net.param_all)
             self.ftrain = self.train_vanilla
 
-        elif traintype == 'adj-init':
-            # single optimizer for all parameters
-            # learning rate for pde parameter is 0
+        # other are new method
+        else:
             optim_param_group = [
                 {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde_trainable, 'lr': 0.0}
+                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
             ]
             self.optimizer['allparam'] = self.optim(optim_param_group,amsgrad=True)
-            self.ftrain = self.train_simu
-            
 
-        elif traintype == 'adj-simu':
-            # single optimizer for all parameters, different learning rate for net and pde
-            optim_param_group = [
-                {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
-            ]
-            self.optimizer['allparam'] = self.optim(optim_param_group, amsgrad=True)
-            self.ftrain = self.train_simu
-        elif traintype == 'adj-bi1opt':
-            # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde
-            optim_param_group = [
-                {'params': self.net.param_net, 'lr': self.opts['lr_net']},
-                {'params': self.net.param_pde_trainable, 'lr': self.opts['lr_pde']}
-            ]
-            # all parameters
-            self.optimizer['allparam'] = optim.Adam(optim_param_group,amsgrad=True)
-            self.ftrain = self.train_bilevel_singleopt
-        else :
-            raise ValueError(f'train type {traintype} not supported')
+            if traintype == 'adj-init' or traintype == 'adj-simu':
+                # single optimizer for all parameters
+                # learning rate for pde parameter is 0
+                self.ftrain = self.train_simu
+            elif traintype == 'adj-bi1opt':
+                # single optimizer for all parameters, toggle pde_param lr between 0 and lr_pde
+                self.ftrain = self.train_bilevel_singleopt
+            else:
+                raise ValueError(f'train type {traintype} not supported')
 
         if lr_options is None or lr_options['scheduler'] == 'constant':
             # constant learning rate
@@ -137,11 +124,12 @@ class Trainer:
             raise e
         
         # log training info
-        end = time.time()
-        sec_per_step = (end - start) / self.estop.epoch
-        mem =  get_mem_stats()
-        self.info.update({'sec_per_step':sec_per_step})
-        self.info.update(mem)
+        if self.estop.epoch > 0:
+            end = time.time()
+            sec_per_step = (end - start) / self.estop.epoch
+            mem =  get_mem_stats()
+            self.info.update({'sec_per_step':sec_per_step})
+            self.info.update(mem)
         
         self.logger.log_params(flatten(self.info))
 
@@ -373,7 +361,7 @@ class Trainer:
         print(f'restore model from {net_path}')
 
     def save_dataset(self):
-        # save dataset
+        ''' make prediction and save dataset'''
         self.pde.make_prediction(self.net)
         dataset_path = self.logger.gen_path("dataset.mat")
         self.pde.dataset.save(dataset_path)
@@ -382,9 +370,12 @@ class Trainer:
     def save(self):
         '''saving dir from logger'''
         # save optimizer
-        self.save_optimizer()
-        self.save_net()
         self.save_dataset()
+
+        # if max_iter is 0, do not save optimizer and net
+        if self.opts['max_iter']>0:
+            self.save_optimizer()
+            self.save_net()
 
     def restore(self, dirname):
         # restore optimizer

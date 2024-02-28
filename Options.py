@@ -4,6 +4,8 @@ import json
 import ast
 import warnings
 
+from MlflowHelper import MlflowHelper
+
 
 default_opts = {
     'logger_opts': {'use_mlflow':True,
@@ -14,7 +16,6 @@ default_opts = {
                     'save_dir':'tmp'},
     'restore': '',
     'traintype': 'vanilla-inv',
-    'trainfcn':'', # init or inv
     'flags': '', 
     'device': 'cuda',
     'seed': 0,
@@ -241,6 +242,13 @@ class Options:
     
 
     def process_flags(self):
+
+        if self.opts['flags'] != '':
+            self.opts['flags'] = self.opts['flags'].split(',')
+            assert all([flag in ['small','local','post','fixiter','lintest'] for flag in self.opts['flags']]), 'invalid flag'
+        else:
+            self.opts['flags'] = []
+
         if 'small' in self.opts['flags']:
             # use small network for testing
             self.opts['nn_opts']['depth'] = 4
@@ -264,6 +272,25 @@ class Options:
         if 'fixiter' in self.opts['flags']:
             # fix number of iterations, do not use early stopping
             self.opts['train_opts']['burnin'] = self.opts['train_opts']['max_iter']
+        
+        if 'post' in self.opts['flags']:
+            # post process only
+            self.opts['train_opts']['max_iter'] = 0
+            self.opts['train_opts']['burnin'] = 0
+            # do not use mlflow, use stdout
+            # mlrun is created when logger is initialized, so set use_mlflow to False
+            self.opts['logger_opts']['use_mlflow'] = False
+            self.opts['logger_opts']['use_stdout'] = True
+            # parse resotre expname:runname
+            restore = self.opts['restore'].split(':')
+            expname = restore[0]
+            runname = restore[1]
+            # get artifact path from mlflow, set save_dir
+            helper = MlflowHelper()
+            run_id = helper.get_id_by_name(expname, runname)
+            paths = helper.get_active_artifact_paths(run_id)
+            self.opts['logger_opts']['save_dir'] = paths['artifacts_dir']
+            
     
     def process_problem(self):
         ''' handle problem specific options '''
@@ -283,11 +310,7 @@ class Options:
 
     def processing(self):
         ''' handle dependent options '''
-        if self.opts['flags'] != '':
-            self.opts['flags'] = self.opts['flags'].split(',')
-            assert all([flag in ['small','local','wunit','fixiter','lintest'] for flag in self.opts['flags']]), 'invalid flag'
-        else:
-            self.opts['flags'] = []
+        
         
         self.process_flags()
 
@@ -314,13 +337,21 @@ class Options:
             # if not vanilla PINN, nn include parameter
             self.opts['nn_opts']['with_param'] = True
 
+        # for init of both vanilla and adj
         if self.opts['traintype'].endswith('init'):
             if self.opts['nn_opts']['with_func']:
                 # use function embedding, use mse of function as loss to train param_func
                 # these set available loss, actuall loss is determined by weights
+                
+                # first of all, both adj and van need funcloss
+                self.opts['weights']['funcloss'] = 1.0
+                
+                # For adj, need the following 
                 self.opts['train_opts']['loss_net'] = 'res,fullresgrad,data,bc'
                 self.opts['train_opts']['loss_pde']= 'funcloss'
-                self.opts['weights']['funcloss'] = 1.0
+                
+                # for init, no matter adj or van, need lr of pde to fit funcloss
+                self.opts['train_opts']['lr_pde'] = 1e-3
             else:
                 # for scalar problem
                 # these set available loss, actuall loss is determined by weights
@@ -328,6 +359,9 @@ class Options:
                 self.opts['train_opts']['loss_net'] = 'res,fullresgrad,data,bc'
                 self.opts['train_opts']['loss_pde'] = 'data'
                 self.opts['weights']['funcloss'] = None
+
+                # for scaler problem, set lr of pde param to 0.0
+                self.opts['train_opts']['lr_pde'] = 0.0
 
         # convert to list of losses
         self.opts['train_opts']['loss_net'] = self.opts['train_opts']['loss_net'].split(',')

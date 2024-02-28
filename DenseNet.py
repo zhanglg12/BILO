@@ -85,7 +85,7 @@ class DenseNet(nn.Module):
             else:
                 param.requires_grad = True
         
-        # temporary solution, if with_func, this part will be overwritten, hence don run this part here
+        # temporary solution, if with_func, this part will be overwritten, hence don't run this part here
         if self.with_func == False:
             self.collect_trainable_param()
 
@@ -103,16 +103,22 @@ class DenseNet(nn.Module):
         
         # For vanilla version, optimizer include all parameters
         # include untrainable parameters, so that the optimizer have the parameter in state_dict
-        if not self.with_func:
-            self.param_all = self.param_net + self.param_pde
+        if not self.with_param:
+            # for vanilla version, no parameter embedding
+            if not self.with_func:
+                self.param_all = self.param_net + self.param_pde
+            else:
+                self.param_all = self.param_net + list(self.func_param.parameters())
+        
+        # for new version, has parameter embedding
         else:
-            self.param_all = self.param_net + list(self.func_param.parameters())
-
-        # collection of trainable parameters
-        if not self.with_func:
-            self.param_pde_trainable = [param for param in self.param_pde if param.requires_grad]
-        else:
-            self.param_pde_trainable = [param for param in self.func_param.parameters() if param.requires_grad]
+            # collection of trainable parameters
+            if not self.with_func:
+                # for problem of scalar parameters, collect param_pde
+                self.param_pde_trainable = [param for param in self.param_pde if param.requires_grad]
+            else:
+                # for problem of function parameters
+                self.param_pde_trainable = list(self.func_param.parameters())
 
     def output_transform(self, x, u):
         '''
