@@ -127,7 +127,6 @@ class HeatProblem(BaseProblem):
         self.testcase = kwargs['testcase']
         self.use_exact_u0 = kwargs['use_exact_u0']
         self.use_res = kwargs['use_res']
-        self.D = kwargs['D']
         
         self.param = {'u0': 0.0}
 

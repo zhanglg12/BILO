@@ -9,10 +9,14 @@ from LorenzProblem import LorenzProblem
 from PoiVarProblem import PoiVarProblem
 from HeatProblem import HeatProblem
 
+from PoissonProblem2 import PoissonProblem2
+
 def create_pde_problem(pde_opts):
     problem_type = pde_opts['problem']
     if problem_type == 'poisson':
         return PoissonProblem(**pde_opts)
+    if problem_type == 'poisson2':
+        return PoissonProblem2(**pde_opts)
     elif problem_type == 'lorenz':
         return LorenzProblem(**pde_opts)
     elif problem_type == 'simpleode':

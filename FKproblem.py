@@ -73,8 +73,9 @@ class FKproblem(BaseProblem):
         # get data loss
         u_pred = net(self.dataset['X_dat_train'],net.params_dict)
         loss = torch.mean(torch.square(u_pred - self.dataset['u_dat_train']))
-        
         return loss
+    
+    
     
     def print_info(self):
         # print parameter

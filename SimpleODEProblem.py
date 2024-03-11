@@ -82,6 +82,7 @@ class SimpleODEProblem(BaseProblem):
         print(f'y0 = {self.y0}')
 
 
+
     def solve_ode(self, param, tend = 1.0, num_points=1001, t_eval=None):
         """
         Solves the ODE using Scipy's solve_ivp with high accuracy.
@@ -156,6 +157,8 @@ class SimpleODEProblem(BaseProblem):
             self.dataset['upred_dat'] = net(self.dataset['x_dat'], net.params_dict)
             params = {k: v.item() for k, v in net.params_dict.items()}
             self.dataset['ufdm_dat'] = self.solve_ode(params)
+        
+        self.prediction_variation(net)
 
     def plot_pred_comp(self, savedir=None):
         ''' plot prediction at x_dat_train
@@ -231,6 +234,7 @@ class SimpleODEProblem(BaseProblem):
         self.dataset.to_np()
         self.plot_pred_comp(savedir=savedir)
         self.plot_pred_traj(savedir=savedir)
+        self.plot_variation(savedir=savedir)
 
 
 
@@ -259,3 +263,8 @@ if __name__ == "__main__":
 
     prob.make_prediction(pdenet)
     prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
+
+
+    # save dataset
+    fpath = os.path.join(optobj.opts['logger_opts']['save_dir'], 'dataset.mat')
+    prob.dataset.save(fpath)

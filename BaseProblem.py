@@ -27,7 +27,13 @@ class BaseProblem(ABC):
 
     # compute validation statistics
     def validate(self, nn):
-        pass
+        '''compute err '''
+        v_dict = {}
+        with torch.no_grad():
+            for vname in nn.trainable_param:
+                err = torch.abs(nn.params_dict[vname] - self.param[vname])
+                v_dict[f'abserr_{vname}'] = err
+        return v_dict
 
     def get_res_pred(self, net):
         ''' get residual and prediction'''
@@ -72,35 +78,34 @@ class BaseProblem(ABC):
 
     def prediction_variation(self, net):
         # make prediction with different parameters
-        x_test = self.dataset['x_dat_test']
+        if 'x_dat_test' in self.dataset:
+            x_test = self.dataset['x_dat_test']
+        elif 'x_dat' in self.dataset:
+            x_test = self.dataset['x_dat']
+        else:
+            raise ValueError('x_dat_test or x_dat not found in dataset')
 
-        # dictionary of {var: {delta: {'pred': u_pred, 'exact': u_exact}}}
-        u_pred_var_dict = {}
+        deltas = [0.0, 0.1, -0.1, 0.2, -0.2]
+        self.dataset['deltas'] = deltas
         
-        # go through all the parameters
-        for k, v in net.params_dict.items():
+        # go through all the trainable pde parameters
+        for k in net.trainable_param:
             param_value = net.params_dict[k].item()
             param_name = k
 
-            deltas = [0.0, 0.1, -0.1]
-
-            u_pred_var_dict[param_name] = {}
-
-            for delta in deltas:    
+            for delta_i, delta in enumerate(deltas):
                 new_value = param_value + delta
-                # replace parameter
-                u_pred_var_dict[param_name][delta] = {}
+                
                 with torch.no_grad():
                     net.params_dict[param_name].data = torch.tensor([[new_value]]).to(x_test.device)
                     u_test = net(x_test, net.params_dict)
-                    u_pred_var_dict[param_name][delta]['pred'] = u_test
+                    vname = f'var_{param_name}_{delta_i}_pred'
+                    self.dataset[vname] = u_test
 
                     if hasattr(self, 'u_exact'):
                         u_exact = self.u_exact(x_test, net.params_dict)
-                        u_pred_var_dict[param_name][delta]['exact'] = u_exact
-
-        self.dataset['u_pred_var'] = u_pred_var_dict
-
+                        vname = f'var_{param_name}_{delta_i}_exact'
+                        self.dataset[vname] = u_exact
 
     @abstractmethod
     def setup_dataset(self, dsopt, noise_opt):
@@ -109,23 +114,37 @@ class BaseProblem(ABC):
     def plot_variation(self, savedir=None):
         # plot variation of net w.r.t each parameter
 
-        x_test = self.dataset['x_dat_test']
+        if 'x_dat_test' in self.dataset:
+            x_test = self.dataset['x_dat_test']
+        elif 'x_dat' in self.dataset:
+            x_test = self.dataset['x_dat']
+        else:
+            raise ValueError('x_dat_test or x_dat not found in dataset')
 
-        # for each net.params_dict, plot the solution and variation
-        for varname, v in self.dataset['u_pred_var'].items():
+        deltas = [0.0, 0.1, -0.1, 0.2, -0.2]
+
+
+        vars = self.dataset.filter('var_')
+        # find unique parameter names
+        varnames = list(set([v.split('_')[1] for v in vars]))
+
+        # for each varname, plot the solution and variation
+        for varname in varnames:
             fig, ax = plt.subplots()
 
             # for each delta
-            for i, delta in enumerate(self.dataset['u_pred_var'][varname]):
+            for i_delta,delta in enumerate(deltas):
 
+                vname_pred = f'var_{varname}_{i_delta}_pred'
                 # plot prediction
-                u_pred = self.dataset['u_pred_var'][varname][delta]['pred']
+                u_pred = self.dataset[vname_pred]
                 ax.plot(x_test, u_pred, label=f'NN $\Delta${varname} = {delta:.2f}')
 
                 # plot exact if available
                 if hasattr(self, 'u_exact'):
+                    vname_exact = f'var_{varname}_{i_delta}_exact'
                     color = ax.lines[-1].get_color()
-                    u_exact = self.dataset['u_pred_var'][varname][delta]['exact']
+                    u_exact = self.dataset[vname_exact]
                     ax.plot(x_test, u_exact, label=f'exact $\Delta${varname} = {delta:.2f}',color=color,linestyle='--')
 
             ax.legend(loc="best")
@@ -136,7 +155,7 @@ class BaseProblem(ABC):
                 fig.savefig(fpath, dpi=300, bbox_inches='tight')
                 print(f'fig saved to {fpath}')
 
-        return ax, fig
+        return
 
     def plot_prediction(self, savedir=None):
         ''' plot prediction at x_dat_train

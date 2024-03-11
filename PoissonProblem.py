@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # define problems for PDE
 import torch
 import os
@@ -19,7 +20,11 @@ class PoissonProblem(BaseProblem):
         # default 1
         self.p = kwargs.get('p', 1)
 
-        self.param = {'D': kwargs['D']}
+        # D for generating data
+        self.D = kwargs['D']
+
+        # initial guess
+        self.param = {'D': kwargs['D0']}
 
         self.lambda_transform = lambda x, u: u * x * (1 - x)
 
@@ -59,19 +64,19 @@ class PoissonProblem(BaseProblem):
 
         # data col-pt, for testing, use exact param
         dataset['x_dat_test'] = torch.linspace(0, 1, dsopt['N_dat_test']).view(-1, 1)
-        dataset['u_dat_test'] = self.u_exact(dataset['x_dat_test'], self.param)
+        dataset['u_dat_test'] = self.u_exact(dataset['x_dat_test'], {'D': self.D})
 
         # data col-pt, for initialization use init_param, for training use exact_param
         dataset['x_dat_train'] = torch.linspace(0, 1, dsopt['N_dat_train']).view(-1, 1)
 
-        dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'], self.param)
+        dataset['u_dat_train'] = self.u_exact(dataset['x_dat_train'], {'D': self.D})
 
         self.dataset = dataset
 
     def validate(self, nn):
         '''compute err '''
         with torch.no_grad():
-            err = torch.abs(nn.params_dict['D'] - self.param['D'])
+            err = torch.abs(nn.params_dict['D'] - self.D)
         return {'abserr': err}
 
     def setup_dataset(self, dsopt, noise_opt):
@@ -79,3 +84,33 @@ class PoissonProblem(BaseProblem):
         self.create_dataset_from_pde(dsopt)
         if noise_opt['use_noise']:
             add_noise(self.dataset, noise_opt)
+
+
+if __name__ == "__main__":
+    import sys
+    from Options import *
+    from DenseNet import *
+    from Problems import *
+
+
+    optobj = Options()
+    optobj.opts['pde_opts']['problem'] = 'poisson'
+
+    optobj.parse_args(*sys.argv[1:])
+    
+    
+    device = set_device('cuda')
+    set_seed(0)
+    
+    print(optobj.opts)
+
+    prob = PoissonProblem(**optobj.opts['pde_opts'])
+    pdenet = prob.setup_network(**optobj.opts['nn_opts'])
+    prob.setup_dataset(optobj.opts['dataset_opts'], optobj.opts['noise_opts'])
+
+    prob.make_prediction(pdenet)
+    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
+
+    # save dataset
+    fpath = os.path.join(optobj.opts['logger_opts']['save_dir'], 'dataset.mat')
+    prob.dataset.save(fpath)

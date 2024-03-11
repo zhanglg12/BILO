@@ -282,21 +282,20 @@ class Trainer:
 
             self.optimizer['allparam'].zero_grad()
             self.lossCollection.getloss()
-            self.lossCollection.wtotal.backward(retain_graph=True)
-            self.optimizer['allparam'].step()
-            self.scheduler.step()
-
             # check early stopping
             stophere = self.estop(self.lossCollection.wtotal, self.net.params_dict, epoch)
 
             # print statistics at interval or at stop
             if epoch % self.opts['print_every'] == 0 or stophere:
                 val = self.pde.validate(self.net)
-                self.log_stat(val, epoch)
+                self.logger.log_metrics(val, epoch)
                 self.log_stat(self.lossCollection.wloss_comp, epoch)
             if stophere:
                 break  
 
+            self.lossCollection.wtotal.backward(retain_graph=True)
+            self.optimizer['allparam'].step()
+            self.scheduler.step()
             # next cycle
             epoch += 1
 

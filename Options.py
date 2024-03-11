@@ -36,10 +36,9 @@ default_opts = {
         # for heat problem 0.1 and poisson problem
         'D': 0.1,
         'use_exact_u0':False,
-    
-    },
-    'gbm_opts': {
-        'whichdata': 'uchar_res', # uchar_res, ugt_dat etc
+        'D0': 1.0,
+        # for scalar poisson
+        'p': 1,
     },
     'nn_opts': {
         'depth': 4,
@@ -295,8 +294,11 @@ class Options:
     def process_problem(self):
         ''' handle problem specific options '''
         
-        if self.opts['pde_opts']['problem'] in {'poisson'}:
+        if self.opts['pde_opts']['problem'] in {'poisson','poisson2'}:
             self.opts['pde_opts']['trainable_param'] = 'D'
+        else:
+            # remove D0 key
+            self.opts['pde_opts'].pop('D0', None)
         
         if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
             # merge func_opts to nn_opts, use function embedding
