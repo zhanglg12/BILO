@@ -95,7 +95,7 @@ class lossCollection:
         self.res_unbind = self.res.unbind(dim=1) # unbind residual into a list of 1d tensor
 
         n = self.res.shape[0]
-
+        
         resgradmse = 0.0        
         for pname in self.net.trainable_param:
             for j in range(self.pde.output_dim):

@@ -262,15 +262,16 @@ class Sin(nn.Module):
 
 class ParamFunction(nn.Module):
     '''represent unknown f(x) to be learned, diffusion field or initial condition'''
-    def __init__(self, fdepth=4, fwidth=16, 
+    def __init__(self, input_dim=1, output_dim=1, fdepth=4, fwidth=16, 
                  activation='tanh', output_activation='softplus', 
                  fsiren=False,
                  output_transform=lambda x, u: u):
         super(ParamFunction, self).__init__()
         
         # represent single variable function
-        input_dim = 1
-        output_dim = 1
+
+        self.input_dim = input_dim
+        self.output_dim = output_dim
 
         self.fsiren = fsiren
 

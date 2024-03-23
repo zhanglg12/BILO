@@ -139,6 +139,7 @@ class Trainer:
         '''
         wloss_comp = {}
         epoch = 0
+        
         while True:
 
             self.optimizer['allparam'].zero_grad()
@@ -351,6 +352,7 @@ class Trainer:
 
     def save_net(self):
         # save network
+        
         net_path = self.logger.gen_path("net.pth")
         torch.save(self.net.state_dict(), net_path)
         print(f'save model to {net_path}')

@@ -169,7 +169,7 @@ class HeatProblem(BaseProblem):
         return loss
     
     def get_l2grad(self, net):
-        # estimate l2 norm of u, 1/N \sum u^2
+        # regularization |D'(x)|^2
         x = self.dataset['x_ic_train']
         x.requires_grad_(True)
         

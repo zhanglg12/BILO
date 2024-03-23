@@ -87,23 +87,24 @@ class BaseProblem(ABC):
 
         deltas = [0.0, 0.1, -0.1, 0.2, -0.2]
         self.dataset['deltas'] = deltas
-        
+        # copy the parameters, DO NOT modify the original parameters
+        tmp_param_dict = {k: v.clone() for k, v in net.params_dict.items()}
         # go through all the trainable pde parameters
         for k in net.trainable_param:
-            param_value = net.params_dict[k].item()
+            param_value = tmp_param_dict[k].item()
             param_name = k
 
             for delta_i, delta in enumerate(deltas):
                 new_value = param_value + delta
                 
                 with torch.no_grad():
-                    net.params_dict[param_name].data = torch.tensor([[new_value]]).to(x_test.device)
-                    u_test = net(x_test, net.params_dict)
+                    tmp_param_dict[param_name].data = torch.tensor([[new_value]]).to(x_test.device)
+                    u_test = net(x_test, tmp_param_dict)
                     vname = f'var_{param_name}_{delta_i}_pred'
                     self.dataset[vname] = u_test
 
                     if hasattr(self, 'u_exact'):
-                        u_exact = self.u_exact(x_test, net.params_dict)
+                        u_exact = self.u_exact(x_test, tmp_param_dict)
                         vname = f'var_{param_name}_{delta_i}_exact'
                         self.dataset[vname] = u_exact
 
@@ -201,5 +202,5 @@ class BaseProblem(ABC):
     def visualize(self, savedir=None):
         # visualize the results
         self.dataset.to_np()
-        ax, fig = self.plot_prediction(savedir=savedir)
-        ax, fig = self.plot_variation(savedir=savedir)
+        self.plot_prediction(savedir=savedir)
+        self.plot_variation(savedir=savedir)
