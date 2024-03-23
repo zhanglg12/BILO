@@ -300,7 +300,7 @@ class Options:
             # remove D0 key
             self.opts['pde_opts'].pop('D0', None)
         
-        if self.opts['pde_opts']['problem'] in {'poivar','heat'}:
+        if self.opts['pde_opts']['problem'] in {'poivar','heat','varfk'}:
             # merge func_opts to nn_opts, use function embedding
             self.opts['nn_opts'].update(self.opts['func_opts'])
             self.opts['nn_opts']['with_func'] = True

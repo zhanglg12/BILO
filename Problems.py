@@ -8,6 +8,7 @@ from SimpleODEProblem import SimpleODEProblem
 from LorenzProblem import LorenzProblem
 from PoiVarProblem import PoiVarProblem
 from HeatProblem import HeatProblem
+from varFKproblem import varFKproblem
 
 from PoissonProblem2 import PoissonProblem2
 
@@ -27,6 +28,8 @@ def create_pde_problem(pde_opts):
         return GBMproblem(**pde_opts)
     elif problem_type == 'poivar':
         return PoiVarProblem(**pde_opts)
+    elif problem_type == 'varfk':
+        return varFKproblem(**pde_opts)
     elif problem_type == 'heat':
         return HeatProblem(**pde_opts)
     else:
