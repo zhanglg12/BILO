@@ -78,6 +78,7 @@ class BaseProblem(ABC):
 
     def prediction_variation(self, net):
         # make prediction with different parameters
+        # variation name = f'var_{param_name}_{delta_i}_pred'
         if 'x_dat_test' in self.dataset:
             x_test = self.dataset['x_dat_test']
         elif 'x_dat' in self.dataset:
@@ -85,7 +86,7 @@ class BaseProblem(ABC):
         else:
             raise ValueError('x_dat_test or x_dat not found in dataset')
 
-        deltas = [0.0, 0.1, -0.1, 0.2, -0.2]
+        deltas = [0.0, 0.1, -0.1, 0.2, -0.2, 0.5, -0.5]
         self.dataset['deltas'] = deltas
         # copy the parameters, DO NOT modify the original parameters
         tmp_param_dict = {k: v.clone() for k, v in net.params_dict.items()}
@@ -114,6 +115,7 @@ class BaseProblem(ABC):
 
     def plot_variation(self, savedir=None):
         # plot variation of net w.r.t each parameter
+        
 
         if 'x_dat_test' in self.dataset:
             x_test = self.dataset['x_dat_test']
@@ -122,15 +124,14 @@ class BaseProblem(ABC):
         else:
             raise ValueError('x_dat_test or x_dat not found in dataset')
 
-        deltas = [0.0, 0.1, -0.1, 0.2, -0.2]
+        deltas = self.dataset['deltas']
 
-
-        vars = self.dataset.filter('var_')
+        var_names = self.dataset.filter('var_')
         # find unique parameter names
-        varnames = list(set([v.split('_')[1] for v in vars]))
+        param_names = list(set([v.split('_')[1] for v in var_names]))
 
         # for each varname, plot the solution and variation
-        for varname in varnames:
+        for varname in param_names:
             fig, ax = plt.subplots()
 
             # for each delta

@@ -98,6 +98,8 @@ class FKproblem(BaseProblem):
             self.dataset['upred_dat_train'] = net(x_dat_train, net.params_dict)
             self.dataset['upred_res_train'] = net(x_res_train, net.params_dict)
         
+        self.prediction_variation(net)
+        
     def plot_scatter(self, X, u, fname = 'fig_scatter.png', savedir=None):
         ''' plot u vs x, color is t'''
         x = X[:,1]
@@ -123,11 +125,66 @@ class FKproblem(BaseProblem):
         ax, fig = self.plot_scatter(self.dataset['X_res'], self.dataset['upred_res'], fname = 'fig_upred_res.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['upred_dat_train'], fname = 'fig_upred_dat_train.png', savedir=savedir)
         ax, fig = self.plot_scatter(self.dataset['X_res_train'], self.dataset['upred_res_train'], fname = 'fig_upred_res_train.png', savedir=savedir)
-
         ax, fig = self.plot_scatter(self.dataset['X_dat_train'], self.dataset['u_dat_train'], fname = 'fig_u_dat_train.png', savedir=savedir)
 
         self.plot_upred_dat(savedir=savedir)
         self.plot_sample(savedir=savedir)
+        self.plot_variation(savedir=savedir)
+    
+
+    def prediction_variation(self, net):
+        # make prediction with different parameters
+        # variation name = f'var_{param_name}_{delta_i}_pred'
+        # only look at final time
+        x_test = self.dataset['X_dat']
+
+        deltas = [0.0, 0.1, -0.1, 0.2, -0.2, 0.5, -0.5]
+        self.dataset['deltas'] = deltas
+        # copy the parameters, DO NOT modify the original parameters
+        tmp_param_dict = {k: v.clone() for k, v in net.params_dict.items()}
+        # go through all the trainable pde parameters
+        for k in net.trainable_param:
+            param_value = tmp_param_dict[k].item()
+            param_name = k
+
+            for delta_i, delta in enumerate(deltas):
+                new_value = param_value + delta
+                
+                with torch.no_grad():
+                    tmp_param_dict[param_name].data = torch.tensor([[new_value]]).to(x_test.device)
+                    u_test = net(x_test, tmp_param_dict)
+                    vname = f'var_{param_name}_{delta_i}_pred'
+                    self.dataset[vname] = u_test
+
+                    if hasattr(self, 'u_exact'):
+                        u_exact = self.u_exact(x_test, tmp_param_dict)
+                        vname = f'var_{param_name}_{delta_i}_exact'
+                        self.dataset[vname] = u_exact
+    
+    def plot_variation(self, savedir=None):
+        # go through uvar and var
+            
+        x = self.dataset['X_dat'][:,1]
+
+        deltas = self.dataset['deltas']
+        
+        for param_name in ['rD','rRHO']:
+            for delta_i, delta in enumerate(deltas):
+                fig, ax = plt.subplots()
+                vname = f'var_{param_name}_{delta_i}_pred'
+            
+                ax.plot(x, self.dataset['u_dat'], label='u')
+                ax.plot(x, self.dataset[vname], label=f'u-{param_name}-{delta}')
+                ax.legend(loc="best")
+                
+                if savedir is not None:
+                    path = os.path.join(savedir, f'fig_var_{param_name}_{delta_i}.png')
+                    plt.savefig(path, dpi=300, bbox_inches='tight')
+                    print(f'fig saved to {path}')
+                
+                plt.close(fig)
+
+
 
     def create_dataset_from_file(self, dsopt):
         dataset = self.dataset

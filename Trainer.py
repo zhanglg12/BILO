@@ -226,7 +226,6 @@ class Trainer:
                 if epoch_lower == self.opts['max_iter_lower']:
                     break
                     
-                
                 # compute lower level loss
                 self.optimizer['allparam'].zero_grad()
                 self.lossCollection.getloss()
