@@ -89,7 +89,7 @@ default_opts = {
         'tol_lower': 1e-3, # lower level tol
         'max_iter_lower':1000,
         'loss_net':'res,fullresgrad,bc', # loss for network weights
-        'loss_pde':'data,l2grad', # loss for pde parameter
+        'loss_pde':'data,l2grad,l1grad', # loss for pde parameter
         'reset_optim':True, # reset optimizer state
         'whichoptim':'adam'
     },
@@ -106,6 +106,7 @@ default_opts = {
         'bc':None,
         'funcloss':None, #mse of unknonw function
         'l2grad':None,
+        'l1grad':None,
     },
     'loss_opts': {
         'msample':100, #number of samples for resgrad
@@ -304,6 +305,8 @@ class Options:
             # merge func_opts to nn_opts, use function embedding
             self.opts['nn_opts'].update(self.opts['func_opts'])
             self.opts['nn_opts']['with_func'] = True
+
+
         else:
             # for scalar problem, can not use l2reg
             self.opts['weights']['l2grad'] =  None

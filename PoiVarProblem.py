@@ -289,6 +289,15 @@ class PoiVarProblem(BaseProblem):
         D_x = torch.autograd.grad(D, x,
             create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(D))[0]
         return torch.mean(torch.square(D_x))
+
+    def get_l1grad(self, net):
+        # estimate l1 norm of u, 1/N \sum |u|
+        
+        x = self.dataset['x_res_train']
+        D = net.func_param(x)
+        D_x = torch.autograd.grad(D, x,
+            create_graph=True, retain_graph=True, grad_outputs=torch.ones_like(D))[0]
+        return torch.mean(torch.abs(D_x))
     
     def get_data_loss(self, net):
         # get data loss

@@ -31,7 +31,8 @@ class lossCollection:
         'fullresgrad': self.fullresgradloss, 'data': self.dataloss,
         'bc': self.bcloss,'funcloss':self.funcloss,
         'resgradfunc': self.resgradfuncloss,
-        'l2grad': self.l2gradloss}
+        'l2grad': self.l2gradloss,
+        'l1grad': self.l1gradloss}
 
         self.loss_weight = {} # dict of active loss: weight
 
@@ -66,6 +67,9 @@ class lossCollection:
     
     def l2gradloss(self):
         return self.pde.get_l2grad(self.net)
+    
+    def l1gradloss(self):
+        return self.pde.get_l1grad(self.net)
         
 
     def resgradfuncloss(self):
