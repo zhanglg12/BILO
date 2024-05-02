@@ -1,5 +1,5 @@
-# base class for PoissonProblem and SimpleODEProblem
-# visualization method for 1d problem
+# base class for PDE problem
+# A problem shoudl include dataset and network
 import os
 from abc import ABC, abstractmethod
 

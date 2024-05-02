@@ -10,10 +10,11 @@ from BaseOperator import BaseOperator
 
 class FKOperatorLearning(BaseOperator):
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         self.input_dim = 2
         self.output_dim = 1
         self.param_dim = 2
-        self.dataset = DataSet(kwargs['datafile'])
         self.lambda_transform = lambda X, u: (0.5 * torch.sin(np.pi * X[:,1:2]) ** 2)+ u * X[:,1:2] * (1 - X[:,1:2]) * X[:,0:1]
     
 
@@ -31,10 +32,11 @@ class FKOperatorLearning(BaseOperator):
         self.X_data = X_data.to('cuda')
         self.deeponet.to('cuda')
     
-    def inverse_log(self, step):
+    def inverse_log(self):
         D = self.pde_param[0,0].item()
         rho = self.pde_param[0,1].item()
-        print(f'step: {step}, D: {D}, rho: {rho}')
+        param_dict = {'rD': D, 'rRHO': rho}
+        return param_dict
 
     def get_inverse_data(self, d, rho, final_time = False):
         # get the final time U at d, rho, and X
@@ -58,7 +60,8 @@ class FKOperatorLearning(BaseOperator):
         nx = self.dataset['x'].numel()
 
         U = U.reshape(nt,nx)
-        U_final = U[:,-1]
+        # first dimension of U is batch
+        U_final = U[:,-1].reshape(1,nx)
         # create X, first column 1, second column x coord
         X_final = torch.zeros(nx,2)
         X_final[:,1] = self.dataset['x']

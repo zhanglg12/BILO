@@ -6,7 +6,7 @@ import numpy as np
 
 from DataSet import DataSet
 from DeepONet import DeepONet, OpData
-
+from Logger import Logger
 
 class BaseOperator(ABC):
     # operator learning
@@ -23,7 +23,11 @@ class BaseOperator(ABC):
         self.X_data = None
         self.U_data = None
 
-        self.opts = None
+        self.train_opts = kwargs['train_opts']
+    
+
+    def setup_logger(self, logger_opts):
+        self.logger = Logger(logger_opts)
 
     def init_deeponet(self):
         # Initialize DeepONet
@@ -31,10 +35,14 @@ class BaseOperator(ABC):
          lambda_transform=self.lambda_transform)
 
 
-    def init_dataloader(self, batch_size=100):
+    def init_dataloader(self):
         # Initialize data loader
+
+        batch_size = self.train_opts['batch_size']
+        split = self.train_opts['split'] # percentage of training data
+
         n_total = len(self.OpData)
-        train_size = int(0.8 * n_total)
+        train_size = int(split * n_total)
         test_size = n_total - train_size
 
         total_indices = torch.randperm(len(self.OpData))
@@ -50,23 +58,24 @@ class BaseOperator(ABC):
         self.test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 
-    def init_training(self, **kwargs):
-        # setup network and dataloader
-        batch_size = kwargs.get('batch_size', 100)
-
+    def init_training(self):
+        # setup network and dataloader before training
+        # move to cuda
         # Initialize the network and dataloader
         
         self.deeponet.to('cuda')
-
         self.dataset.to_device('cuda')
-        self.OpData = OpData(self.dataset['X'], self.dataset['P'], self.dataset['U'])
-        self.init_dataloader(batch_size=batch_size)
-        
-    def train(self, **kwargs):
 
-        max_iter = kwargs.get('max_iter', 1000)
-        print_every = kwargs.get('print_every', 100)
-        save_every = kwargs.get('save_every', 500)
+        self.OpData = OpData(self.dataset['X'], self.dataset['P'], self.dataset['U'])
+        self.init_dataloader()
+    
+
+    def pretrain(self, **kwargs):
+        # train the operator with data
+
+        max_iter = self.train_opts['max_iter']
+        print_every = self.train_opts['print_every']
+        save_every = self.train_opts['save_every']
 
         # Initialize the optimizer and loss function
         self.optimizer = torch.optim.Adam(self.deeponet.parameters(), lr=1e-3)
@@ -84,14 +93,16 @@ class BaseOperator(ABC):
                 # Logging
                 if step % print_every == 0:
                     test_loss = self.evaluate()
-                    print(f'Step {step}, Loss: {loss.item()}, Test Loss: {test_loss}')
+                    metric = {'trainmse': loss.item(), 'testmse': test_loss}
+                    self.logger.log_metrics(metric, step=step)
 
                 # Checkpoint saving
                 yes_save = (step>0) and (step % save_every == 0 or step == max_iter)
                 if yes_save:
-                    checkpoint_path = f'checkpoint_step_{step}.pth'
-                    torch.save(self.deeponet.state_dict(), checkpoint_path)
-                    print(f'Checkpoint saved to {checkpoint_path}')
+                    ckpt_name = f'checkpoint_step_{step}.pth'
+                    ckpt_path = self.logger.gen_path(ckpt_name)
+                    torch.save(self.deeponet.state_dict(), ckpt_path)
+                    print(f'Checkpoint saved to {ckpt_path}')
 
                 # Backpropagation
                 self.optimizer.zero_grad()
@@ -107,18 +118,20 @@ class BaseOperator(ABC):
         pass
 
     @abstractmethod
-    def inverse_log(self, step):
-        # logging during inverse problem
+    def inverse_log(self):
+        # return parameters for logging
         pass
 
-    def inverse(self, max_iter=1000, print_every=100, save_every=5000):
+    def inverse(self):
         # inverse problem
 
+        max_iter = self.train_opts['max_iter']
+        print_every = self.train_opts['print_every']
+        
         # freeze the network
-        for param in self.deeponet.parameters():
-            param.requires_grad = False
+        self.deeponet.freeze()
 
-        optimizer = torch.optim.Adam([self.pde_param], lr=1e-3)
+        self.optimizer = torch.optim.Adam([self.pde_param], lr=1e-3)
         loss_fn = torch.nn.MSELoss()
 
         step = 0
@@ -128,17 +141,20 @@ class BaseOperator(ABC):
 
             # Logging
             if step % print_every == 0 or step == max_iter:
-                self.inverse_log(step)
+                metric = self.inverse_log()
+                metric['loss'] = loss.item()
+                self.logger.log_metrics(metric, step=step)
 
             # Backpropagation
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             # Increment the step count
             step += 1
 
     def evaluate(self):
+        # evaluate on testing data
         self.deeponet.eval()
         total_loss = 0
         with torch.no_grad():

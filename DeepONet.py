@@ -30,7 +30,11 @@ class DeepONet(nn.Module):
         self.branch_net = self.build_subnet(param_dim, branch_depth)
         self.trunk_net = self.build_subnet(X_dim, trunck_depth)
         
-
+    def freeze(self):
+        # freeze the parameters of the network
+        for param in self.parameters():
+            param.requires_grad = False
+    
     def build_subnet(self, input_dim, depth):
 
         layers = [input_dim] + [self.width]*depth  # List of layer widths
