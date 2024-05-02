@@ -21,6 +21,7 @@ class DataSet(dict):
 
     def readmat(self, file_path, as_torch=True):
         # load data from .mat file, skip meta data
+        # default as torch tensor
         data = loadmat(file_path, mat_dtype=True)
 
         for key, value in data.items():
