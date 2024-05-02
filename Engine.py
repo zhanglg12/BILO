@@ -16,7 +16,6 @@ from DenseNet import load_artifact
 from Problems import create_pde_problem
 from lossCollection import lossCollection
 
-from PlotHelper import PlotHelper
 from Logger import Logger
 from Trainer import Trainer
 
