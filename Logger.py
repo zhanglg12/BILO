@@ -16,6 +16,11 @@ class Logger:
         if self.opts['use_mlflow']:
             runname = self.opts['run_name']
             expname = self.opts['experiment_name']
+            # check if experiment exist
+            if mlflow.get_experiment_by_name(expname) is None:
+                mlflow.create_experiment(expname)
+                print(f"Create experiment {expname}")
+
             # check if run_name already exist
             if mlflow.search_runs(experiment_ids=mlflow.get_experiment_by_name(expname).experiment_id, filter_string=f"tags.mlflow.runName = '{runname}'").shape[0] > 0:
                 Warning(f"Run name {runname} already exist!")

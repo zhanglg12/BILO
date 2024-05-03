@@ -378,7 +378,7 @@ class Trainer:
             self.save_net()
 
     def restore(self, dirname):
-        # restore optimizer
+        # restore optimizer and network
         self.restore_optimizer(dirname)
 
         fnet = os.path.join(dirname, 'net.pth')

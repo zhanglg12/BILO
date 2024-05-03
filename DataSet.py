@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import os
 import sys
 from scipy.io import loadmat, savemat
 import numpy as np
@@ -14,6 +14,9 @@ class DataSet(dict):
         # if only one argument, assume it is a file path, remove 
         if len(args) == 1:
             file_path = args[0]
+            # check file exist
+            if not os.path.exists(file_path):
+                raise ValueError(f'File {file_path} not exist!')
             self.readmat(file_path)
         else:
             super().__init__(*args, **kwargs)

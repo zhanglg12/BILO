@@ -221,23 +221,6 @@ class DenseNet(nn.Module):
 
 
 
-def load_artifact(exp_name=None, run_name=None, run_id=None, name_str=None):
-    """ 
-    Load options and artifact paths from mlflow run id or name
-    """
-    if name_str is not None:
-        try:
-            exp_name, run_name = name_str.split(':')
-        except ValueError:
-            raise ValueError("name_str must be in the format 'exp_name:run_name'")
-
-    helper = MlflowHelper()        
-    if run_id is None:
-        run_id = helper.get_id_by_name(exp_name, run_name)
-
-    artifact_paths = helper.get_active_artifact_paths(run_id)
-    opts = read_json(artifact_paths['options.json'])
-    return opts, artifact_paths
 
 
 def load_model(exp_name=None, run_name=None, run_id=None, name_str=None):

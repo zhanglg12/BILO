@@ -20,24 +20,11 @@ default_opts = {
     'flags': '', 
     'device': 'cuda',
     'seed': 0,
-    
+    'datafile': '',
     'nn_opts': {
-        'depth': 4,
+        'branch_depth': 4,
+        'trunck_depth': 4,
         'width': 64,
-        'input_dim': 1,
-        'output_dim': 1,
-    },
-    'dataset_opts': {
-        'N_res_train': 101,
-        'N_res_test': 101,
-        'N_dat_train': 101,
-        'N_dat_test': 101,
-
-        # for heat problem
-        'N_ic_train':101, # point for evaluating l2grad
-        # for heat and FK problem
-        'Nx':51,
-        'Nt':51,
     },
     'train_opts': {
         'print_every': 20,

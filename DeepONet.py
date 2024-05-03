@@ -25,6 +25,7 @@ class DeepONet(nn.Module):
         self.branch_depth = branch_depth
         self.trunck_depth = trunck_depth
         self.lambda_transform = lambda_transform
+        self.pde_param = None
 
         
         self.branch_net = self.build_subnet(param_dim, branch_depth)
