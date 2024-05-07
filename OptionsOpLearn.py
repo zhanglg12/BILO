@@ -42,6 +42,7 @@ default_opts = {
         'lr': 1e-3,
         'batch_size': 1000,
         'split': 0.9,
+        'wreg':1e-3,
     },
     'dataset_opts': {
         'N_res_train': 101,

@@ -116,6 +116,11 @@ class OperatorTrainer:
             U_pred = self.deeponet(self.train_dataset.P, self.train_dataset.X)
             loss = self.loss_fn(U_pred, self.train_dataset.U)
 
+            if self.traintype == 'inverse':
+                # Add regularization loss
+                regloss = self.olprob.regularization_loss(self.deeponet)
+                loss += self.train_opts['wreg'] * regloss
+
             # Logging
             if step % print_every == 0 or step == max_iter - 1:
                 metric = {'mse': loss.item()}
@@ -126,6 +131,7 @@ class OperatorTrainer:
                 else:
                     param_metric = self.olprob.get_metrics(self.deeponet)
                     metric.update(param_metric)
+                    metric['regloss'] = regloss.item()
 
 
                 self.logger.log_metrics(metric, step=step)
