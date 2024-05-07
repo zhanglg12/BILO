@@ -20,11 +20,5 @@ class BaseOperator(ABC):
         self.dataset = DataSet(kwargs['datafile'])
         self.lambda_transform = None
 
-
-        # for inverse problem
-        self.pde_param = None
-        self.X_data = None
-        self.U_data = None
-
-        self.train_opts = kwargs['train_opts']
+        
     

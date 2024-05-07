@@ -8,8 +8,8 @@ from DataSet import DataSet
 class DeepONet(nn.Module):
     def __init__(self, 
     param_dim=1, X_dim=1, output_dim=1,
-    width=64,  branch_depth=4, trunck_depth=4,
-    lambda_transform=lambda x, u: u):
+    width=64,  branch_depth=4, trunk_depth=4,
+    lambda_transform=lambda x, u: u, mask=None):
 
         super(DeepONet, self).__init__()
         # param_dim is the dimension of the PDE parameter space
@@ -23,13 +23,15 @@ class DeepONet(nn.Module):
         self.X_dim = X_dim
         self.output_dim = output_dim
         self.branch_depth = branch_depth
-        self.trunck_depth = trunck_depth
+        self.trunk_depth = trunk_depth
         self.lambda_transform = lambda_transform
         self.pde_param = None
 
-        
+        # mask on the parameter tensor
+        self.mask = nn.Parameter(mask, requires_grad=False) if mask is not None else None 
+
         self.branch_net = self.build_subnet(param_dim, branch_depth)
-        self.trunk_net = self.build_subnet(X_dim, trunck_depth)
+        self.trunk_net = self.build_subnet(X_dim, trunk_depth)
         
     def freeze(self):
         # freeze the parameters of the network
@@ -48,8 +50,11 @@ class DeepONet(nn.Module):
 
     def forward(self, P_input, X_input):
         # Process each parameter set in the branch network
-        branch_out = self.branch_net(P_input)  # [batch_size, width]
 
+        if self.mask is not None:
+            P_input = P_input * self.mask
+
+        branch_out = self.branch_net(P_input)  # [batch_size, width]
 
         # Process the fixed grid in the trunk network
         trunk_out = self.trunk_net(X_input)  # [num_points, width]

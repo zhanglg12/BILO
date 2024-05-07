@@ -20,11 +20,18 @@ default_opts = {
     'flags': '', 
     'device': 'cuda',
     'seed': 0,
-    'datafile': '',
     'nn_opts': {
-        'branch_depth': 4,
-        'trunck_depth': 4,
+        'branch_depth': 5,
+        'trunk_depth': 5,
         'width': 64,
+    },
+    'pde_opts': {
+        'datafile': '',
+        'problem': 'fk',
+        'testcase': 1,
+        # dimension of parameter, for scalar, same as number of scalar parameters
+        # for function, same as discretization of function
+        'param_dim': 1,
     },
     'train_opts': {
         'print_every': 20,
@@ -34,7 +41,19 @@ default_opts = {
         'patience': 1000,
         'lr': 1e-3,
         'batch_size': 1000,
-        'split': 0.8,
+        'split': 0.9,
+    },
+    'dataset_opts': {
+        'N_res_train': 101,
+        'N_res_test': 101,
+        'N_dat_train': 101,
+        'N_dat_test': 101,
+
+        # for heat problem
+        'N_ic_train':101, # point for evaluating l2grad
+        # for heat and FK problem
+        'Nx':51,
+        'Nt':51,
     },
     'noise_opts':{
         'use_noise': False,

@@ -8,6 +8,7 @@ import numpy as np
 from DataSet import DataSet
 from DeepONet import DeepONet, OpData
 from Logger import Logger
+from util import flatten
 
 class OperatorTrainer:
     # operator learning
@@ -19,6 +20,10 @@ class OperatorTrainer:
         self.dataset = dataset
         self.device = device
         self.train_opts = train_opts
+
+        self.info = {}
+        self.info['num_params'] = sum(p.numel() for p in self.deeponet.parameters())
+        self.info['num_train_params'] = sum(p.numel() for p in self.deeponet.parameters() if p.requires_grad)
 
     def init_pretrain_data(self):
         # For pre-training step, split the data into training and testing sets
@@ -52,12 +57,15 @@ class OperatorTrainer:
             self.trainable_param = self.deeponet.parameters()
 
         elif traintype == 'inverse':
-            U_data, X_data = self.olprob.get_inverse_data()
             # to device
-            U_data = U_data.to(self.device)
-            X_data = X_data.to(self.device)
+            self.olprob.dataset.to_device(self.device)
+            # for operator learning, first dimension is batch
+            X_data, U_data = self.olprob.get_inverse_data()
+            
 
             self.train_dataset = OpData(X_data, self.deeponet.pde_param, U_data)
+
+            # set pde_param to be trainable
             self.deeponet.pde_param.requires_grad = True
             self.trainable_param = [self.deeponet.pde_param]
 
@@ -74,11 +82,18 @@ class OperatorTrainer:
         except Exception as e:
             raise e
         
+        self.logger.log_params(flatten(self.info))
+        
+    def save(self):
+        # save data and network 
+        self.save_net()
+        
         if self.traintype == 'pretrain':
             # save prediction on all data
             self.save_data('pretrain_pred.mat')
+        else:
+            self.save_data('inverse_pred.mat')
 
-        self.save_net()
             
         
 
@@ -95,21 +110,23 @@ class OperatorTrainer:
 
         # Start the training iterations
         step = 0
-        while step <= max_iter:
+        while step < max_iter:
             # Training mode and forward pass
             self.deeponet.train()
             U_pred = self.deeponet(self.train_dataset.P, self.train_dataset.X)
             loss = self.loss_fn(U_pred, self.train_dataset.U)
 
             # Logging
-            if step % print_every == 0:
+            if step % print_every == 0 or step == max_iter - 1:
                 metric = {'mse': loss.item()}
-                param_metric = self.olprob.get_metrics(self.deeponet.pde_param)
-                metric.update(param_metric)
 
                 if self.traintype == 'pretrain':
                     test_loss = self.evaluate()
                     metric['testmse'] = test_loss.item()
+                else:
+                    param_metric = self.olprob.get_metrics(self.deeponet)
+                    metric.update(param_metric)
+
 
                 self.logger.log_metrics(metric, step=step)
 
@@ -142,17 +159,18 @@ class OperatorTrainer:
         print(f"Model loaded from {checkpoint_path}")
 
 
-    
     def save_data(self, filename):
-        # save prediction on all data
-        P = self.dataset['P']
-        U_pred = self.deeponet(P, self.OpData.X)
+        if self.traintype == 'pretrain':
+            self.olprob.make_prediction_pretrain(self.deeponet)
+            fpath = self.logger.gen_path(filename)
 
-        self.pred_dataset = DataSet()
-        self.pred_dataset['U'] = U_pred
+            self.olprob.pred_dataset.save(fpath)
         
-        fpath = self.logger.gen_path(filename)
-        self.pred_dataset.save(fpath)
+        elif self.traintype == 'inverse':
+            self.olprob.make_prediction_inverse(self.deeponet)
+
+            fpath = self.logger.gen_path(filename)
+            self.olprob.dataset.save(fpath)
 
     def save_net(self):
         # save network

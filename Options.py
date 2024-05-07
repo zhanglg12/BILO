@@ -31,7 +31,7 @@ default_opts = {
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
         'use_res': False, # used in fkproblem and heatproblem, use res as training data
-        'testcase': 0, # only used in PoiVarProblem heatproblem, 0: simple, 1: sin
+        'testcase': 0,
         # for heat problem 0.1 and poisson problem
         'D': 0.1,
         'use_exact_u0':False,

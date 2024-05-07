@@ -1,21 +1,32 @@
 #!/usr/bin/env python
 import sys
 import os
-from util import read_json
+from datetime import datetime
+from util import read_json, print_dict
 
 import torch
+
 from OptionsOpLearn import OptionsOpLearn
-from FKDeepONet import FKOperatorLearning
 from OperatorTrainer import OperatorTrainer
 from Logger import Logger
 from MlflowHelper import load_artifact
-from util import print_dict
+
+from FKDeepONet import FKOperatorLearning
+from VarPoiDeepONet import VarPoiDeepONet
 
 
 opts = OptionsOpLearn()
 opts.parse_args(*sys.argv[1:])
 
-
+pid = os.getpid()
+# save command to file
+f = open("commands.txt", "a")
+f.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+f.write(f'  pid: {pid}')
+f.write('\n')
+f.write(' '.join(sys.argv))
+f.write('\n')
+f.close()
 
 
 # restore from a previous run
@@ -38,12 +49,21 @@ if opts.opts['restore'] != '':
     
     # restore operator architecture
     opts.opts['nn_opts'].update(restore_opts['nn_opts'])
-    # use same datafile
-    opts.opts['datafile'] = restore_opts['datafile']
 
 
 # setup the operator learning problem
-fkoperator = FKOperatorLearning(datafile=opts.opts['datafile'], train_opts = opts.opts['train_opts'])
+if opts.opts['pde_opts']['problem'] == 'fk':
+    fkoperator = FKOperatorLearning(**opts.opts['pde_opts'])
+elif opts.opts['pde_opts']['problem'] == 'varpoi':
+    fkoperator = VarPoiDeepONet(**opts.opts['pde_opts'])
+else:
+    raise ValueError(f"problem {opts.opts['pde_opts']['problem']} not recognized")
+
+# setup dataset for training
+if opts.opts['traintype'] == 'inverse':
+    fkoperator.setup_dataset(opts.opts['dataset_opts'], opts.opts['noise_opts'])
+
+# setup netowrk
 deeponet = fkoperator.setup_network(**opts.opts['nn_opts'])
 logger = Logger(opts.opts['logger_opts'])
 
@@ -57,8 +77,10 @@ trainer.config_train(opts.opts['traintype'])
 print_dict(opts.opts)
 logger.log_options(opts.opts)
 trainer.train()
+trainer.save()
 
-
+if opts.opts['traintype'] == 'inverse':
+    fkoperator.visualize(savedir=logger.get_dir())
 
 
 

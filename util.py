@@ -213,3 +213,13 @@ def griddata_subsample(gt, gx, u, Nt, Nx):
     sgx = gx[np.ix_(tidx, xidx)]
 
     return sgt, sgx, su
+
+def uniform_subsample_with_endpoint(x, N):
+    '''uniformly subsample x, with the first and last point included'''
+    n = x.shape[0]
+    idx = np.linspace(0, n-1, N, dtype=int)
+    if idx[0] != 0:
+        idx[0] = 0
+    if idx[-1] != n-1:
+        idx[-1] = n-1
+    return x[idx]
