@@ -18,7 +18,7 @@ from torchreparam import ReparamModule
 
 GLOBTEST = False
 
-class PoiDenseNet(DenseNet):
+class VarPoiDenseNet(DenseNet):
     ''' override the embedding function of DenseNet'''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -41,7 +41,7 @@ class PoiDenseNet(DenseNet):
             self.func_param.layers[0].weight.data.fill_(0.0)
             self.func_param.layers[0].weight.requires_grad = False
             
-            # For testing, PoiDenseNet is linear
+            # For testing, VarPoiDenseNet is linear
             self.act = nn.Identity()
             self.output_layer = nn.Identity()
         else:
@@ -146,7 +146,7 @@ class PoiDenseNet(DenseNet):
     
 
 
-class PoiVarProblem(BaseProblem):
+class VarPoiProblem(BaseProblem):
     def __init__(self, **kwargs):
         super().__init__()
         self.input_dim = 1
@@ -262,7 +262,7 @@ class PoiVarProblem(BaseProblem):
         if init_param is not None:
             pde_param.update(init_param)
 
-        net = PoiDenseNet(**kwargs,
+        net = VarPoiDenseNet(**kwargs,
                         lambda_transform=self.lambda_transform,
                         params_dict= self.param,
                         trainable_param = self.opts['trainable_param'])
@@ -503,7 +503,7 @@ if __name__ == "__main__":
     
     print(optobj.opts)
 
-    prob = PoiVarProblem(**optobj.opts['pde_opts'])
+    prob = VarPoiProblem(**optobj.opts['pde_opts'])
     prob.setup_dataset(optobj.opts['dataset_opts'],optobj.opts['noise_opts'])
     pdenet = prob.setup_network(**optobj.opts['nn_opts'])
 
