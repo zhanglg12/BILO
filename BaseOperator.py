@@ -20,5 +20,7 @@ class BaseOperator(ABC):
         self.dataset = DataSet(kwargs['datafile'])
         self.lambda_transform = None
 
+    def regularization_loss(self, nn):
+        return 0.0
         
     

@@ -38,6 +38,8 @@ default_opts = {
         'D0': 1.0,
         # for scalar poisson
         'p': 1,
+        # For GBM problem
+        'whichdata':'ugt_dat', # which data to use for data loss
     },
     'nn_opts': {
         'depth': 4,
@@ -68,7 +70,10 @@ default_opts = {
 
         # for heat problem
         'N_ic_train':101, # point for evaluating l2grad
-        # for heat and FK problem
+        
+        # for gbm problem
+        'N_bc_train': 101,
+
         'Nx':51,
         'Nt':51,
     },

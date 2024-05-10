@@ -116,8 +116,9 @@ class OperatorTrainer:
             U_pred = self.deeponet(self.train_dataset.P, self.train_dataset.X)
             loss = self.loss_fn(U_pred, self.train_dataset.U)
 
-            if self.traintype == 'inverse':
+            if self.traintype == 'inverse' and self.train_opts['wreg'] is not None:
                 # Add regularization loss
+                # ad-hoc regularization loss, use for poivar only
                 regloss = self.olprob.regularization_loss(self.deeponet)
                 loss += self.train_opts['wreg'] * regloss
 
@@ -131,7 +132,10 @@ class OperatorTrainer:
                 else:
                     param_metric = self.olprob.get_metrics(self.deeponet)
                     metric.update(param_metric)
-                    metric['regloss'] = regloss.item()
+
+                    # ad-hoc regularization loss, use for poivar only
+                    if self.train_opts['wreg'] is not None:
+                        metric['regloss'] = regloss.item()
 
 
                 self.logger.log_metrics(metric, step=step)

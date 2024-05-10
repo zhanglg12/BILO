@@ -34,6 +34,15 @@ class FKOperatorLearning(BaseOperator):
 
         return deeponet
 
+    def get_inverse_data(self):
+        '''return data for training inverse problem'''
+        U = self.dataset['u_dat_train']
+        U = torch.reshape(U, (1, -1))
+        X = self.dataset['X_dat_train']
+
+        return X, U
+
+
     def create_dataset_from_file(self, dsopt):
         # create data for inverse problem
         dataset = self.dataset
