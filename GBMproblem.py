@@ -20,9 +20,7 @@ class GBMproblem(BaseProblem):
         super().__init__()
         
         self.dataset = DataSet(kwargs['datafile'])
-        # get parameter from mat file
-        # check empty string
-        self.param = {}
+        
         self.opts = kwargs
 
         # GBM specific options
@@ -35,7 +33,9 @@ class GBMproblem(BaseProblem):
         self.output_dim = 1
 
 
-        
+        # get parameter from mat file
+        # check empty string
+        self.param = {}
         # inititalize parameters 
         self.param['rD'] = 1.0
         self.param['rRHO'] = 1.0
@@ -195,17 +195,6 @@ class GBMproblem(BaseProblem):
             ds_opts['N_dat_train'] = ds_opts['N_res_train']
             print('use res data for data loss, change X_dat_train and phi_dat_train')
         
-        
-        
-            
-        
-
-
-        
-        
-        
-
-
 
 # simple test of the pde
 # creat a network, check if residual can be computed correctly
@@ -227,7 +216,7 @@ if __name__ == "__main__":
     res, u_pred = prob.residual(net, prob.dataset['X_res'], prob.dataset['phi_res'], prob.dataset['P_res'], prob.dataset['gradPphi_res'])
 
     prob.make_prediction(net)
-    prob.visualize(savedir=optobj.opts['logger_opts']['save_dir'])
+    prob.visualize(savedir='runs/tmp_gbm')
     
 
     # print 2 norm of res

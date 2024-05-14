@@ -30,6 +30,7 @@ class Engine:
         self.logger = None
         self.trainer = None
 
+        self.setup_logger()
         self.restore_run()
 
     def setup_logger(self):
@@ -60,14 +61,14 @@ class Engine:
                 opts_path = os.path.join(self.opts['restore'], 'options.json')
                 restore_opts = read_json(opts_path)
                 self.restore_artifacts = {fname: os.path.join(self.opts['restore'], fname) for fname in os.listdir(self.opts['restore']) if fname.endswith('.pth')}
-                path = self.opts['restore']
                 self.restore_artifacts['artifacts_dir'] = path
+                path = self.opts['restore']
                 print(f'restore from directory {path}')
 
             else:
                 #  restore from exp_name:run_name
-                restore_opts, self.restore_artifacts = load_artifact(name_str=self.opts['restore'])
-                print('restore from mlflow')
+                self.restore_artifacts = self.logger.load_artifact(name_str=self.opts['restore'])
+                restore_opts = read_json(self.restore_artifacts['options.json'])
         
             self.restore_opts(restore_opts)
     

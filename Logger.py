@@ -12,16 +12,17 @@ class Logger:
     def __init__(self, opts):
         self.opts = opts
         
-        
+        #
         if self.opts['use_mlflow']:
             runname = self.opts['run_name']
             expname = self.opts['experiment_name']
-            # check if experiment exist
+            
+            # check if experiment exist. If not, create experiment
             if mlflow.get_experiment_by_name(expname) is None:
                 mlflow.create_experiment(expname)
                 print(f"Create experiment {expname}")
 
-            # check if run_name already exist
+            # check if run_name already exist. If exist, raise warning
             if mlflow.search_runs(experiment_ids=mlflow.get_experiment_by_name(expname).experiment_id, filter_string=f"tags.mlflow.runName = '{runname}'").shape[0] > 0:
                 Warning(f"Run name {runname} already exist!")
                 # Warning ValueError(f"Run name {runname} already exist!")
@@ -30,19 +31,23 @@ class Logger:
             self.mlflow_run = mlflow.start_run(run_name=self.opts['run_name'])
             self.mlrun = mlflow.active_run()
 
+        self.save_dir = self.get_dir()
+
         if self.opts['use_stdout']:
             self.stdout_logger = StdoutLogger(precision=6)
+        
 
         if self.opts['use_csv']:
-            # create dir if not exist
-            os.makedirs(self.opts['save_dir'], exist_ok=True)
+            # use_mlflow = False
+            assert not self.opts['use_mlflow'], "Cannot use both mlflow and csv"
+
             path = self.gen_path('metrics.csv')
             # error if file exist
             if os.path.exists(path):
                 raise ValueError(f"File {path} already exist!")
             self.csv_logger = CSVLogger(path)
         
-        self.save_dir = self.get_dir()
+        
         
 
     def log_metrics(self, metric_dict:dict, step=None):
@@ -77,13 +82,40 @@ class Logger:
         if self.opts['use_mlflow']:
             return get_active_artifact_dir()
         else:
-            dpath = os.path.join(RUNS, self.opts['save_dir'])
+            dpath = os.path.join(RUNS, self.opts['experiment_name'], self.opts['run_name'])
             os.makedirs(dpath, exist_ok=True)
             return dpath
 
     def gen_path(self, filename: str):
         return os.path.join(self.save_dir, filename)
+    
+    def load_artifact(self, exp_name=None, run_name=None, name_str=None):
+        # return all {filename: path} in artifact directory
+        # load from mlflow or local directory
+        if name_str is not None:
+            try:
+                exp_name, run_name = name_str.split(':')
+            except ValueError:
+                raise ValueError("name_str must be in the format 'exp_name:run_name'")
+
+        if self.opts['use_mlflow']:
+            helper = MlflowHelper()
+            run_id = helper.get_id_by_name(exp_name, run_name)
+            artifact_dict = helper.get_artifact_dict_by_id(run_id)
+            
+
+        else:
+            # get files in directory
+            dpath = os.path.join(RUNS, exp_name, run_name)
+            print(f"Load artifact from {dpath}")
+            artifact_dict = {fname: os.path.join(dpath, fname) for fname in os.listdir(dpath)}
+            artifact_dict['artifacts_dir'] = dpath
         
+        return artifact_dict
+
+
+
+            
 
 
 

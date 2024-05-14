@@ -45,7 +45,8 @@ class MlflowHelper:
 
         return run_id
 
-    def get_active_artifact_paths(self, run_id):
+    def get_artifact_dict_by_id(self, run_id):
+        # get all artifact paths from run_id
         
         # get artifact dir
         run = mlflow.get_run(run_id)
@@ -116,9 +117,9 @@ def load_artifact(exp_name=None, run_name=None, run_id=None, name_str=None):
     if run_id is None:
         run_id = helper.get_id_by_name(exp_name, run_name)
 
-    artifact_paths = helper.get_active_artifact_paths(run_id)
-    opts = read_json(artifact_paths['options.json'])
-    return opts, artifact_paths
+    artifact_paths = helper.get_artifact_dict_by_id(run_id)
+    
+    return artifact_paths
     
 if __name__ == "__main__":
     # test if can get run_id corretly
@@ -129,4 +130,4 @@ if __name__ == "__main__":
     kwargs = dict(arg.split('=') for arg in sys.argv[1:])
     id = helper.get_run(**kwargs)
     print(id)
-    print_dict(helper.get_active_artifact_paths(id))
+    print_dict(helper.get_artifact_dict_by_id(id))
