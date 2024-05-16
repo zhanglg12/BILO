@@ -43,8 +43,8 @@ default_opts = {
     'nn_opts': {
         'depth': 4,
         'width': 64,
-        'input_dim': 1,
-        'output_dim': 1,
+        # 'input_dim': 1,
+        # 'output_dim': 1,
         'use_resnet': False,
         'with_param': True,
         'fourier':False,
@@ -170,7 +170,7 @@ class Options(BaseOptions):
             # get artifact path from mlflow, set save_dir
             helper = MlflowHelper()
             run_id = helper.get_id_by_name(expname, runname)
-            paths = helper.get_active_artifact_paths(run_id)
+            paths = helper.get_artifact_dict_by_id(run_id)
             self.opts['logger_opts']['save_dir'] = paths['artifacts_dir']
             
     
@@ -183,7 +183,7 @@ class Options(BaseOptions):
             # remove D0 key
             self.opts['pde_opts'].pop('D0', None)
         
-        if self.opts['pde_opts']['problem'] in {'poivar','heat','varfk'}:
+        if self.opts['pde_opts']['problem'] in {'poivar','heat','varfk','darcy'}:
             # merge func_opts to nn_opts, use function embedding
             self.opts['nn_opts'].update(self.opts['func_opts'])
             self.opts['nn_opts']['with_func'] = True
@@ -201,6 +201,9 @@ class Options(BaseOptions):
         
         if self.opts['pde_opts']['problem'] in {'poivar'}:
             self.opts['pde_opts']['trainable_param'] = 'D'
+        
+        if self.opts['pde_opts']['problem'] in {'darcy'}:
+            self.opts['pde_opts']['trainable_param'] = 'f'
         
         del self.opts['func_opts']
 

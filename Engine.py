@@ -44,8 +44,6 @@ class Engine:
         
         self.net = self.pde.setup_network(**self.opts['nn_opts'])
 
-        self.pde.print_info()
-
     def restore_opts(self, restore_opts):
         ''' restore options from a previous run, and update with new options
         '''

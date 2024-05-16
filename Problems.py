@@ -9,6 +9,7 @@ from LorenzProblem import LorenzProblem
 from VarPoiProblem import VarPoiProblem
 from HeatProblem import HeatProblem
 from varFKproblem import varFKproblem
+from DarcyProblem import DarcyProblem
 
 from PoissonProblem2 import PoissonProblem2
 
@@ -32,6 +33,8 @@ def create_pde_problem(pde_opts):
         return varFKproblem(**pde_opts)
     elif problem_type == 'heat':
         return HeatProblem(**pde_opts)
+    elif problem_type == 'darcy':
+        return DarcyProblem(**pde_opts)
     else:
         raise ValueError(f'Unknown problem type: {problem_type}')
 

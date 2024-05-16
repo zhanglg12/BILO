@@ -165,21 +165,21 @@ class GBMproblem(BaseProblem):
         # data loss
         ndat_train = min(ds_opts['N_dat_train'], self.dataset['X_dat'].shape[0])
         vars = self.dataset.filter('_dat')
-        self.dataset.subsample_firstn_astrain(ndat_train, vars)
+        self.dataset.subsample_unif_astrain(ndat_train, vars)
         print('downsample ', vars, ' to ', ndat_train)
         ds_opts['N_dat_train'] = ndat_train
 
         # res loss
         nres_train = min(ds_opts['N_res_train'], self.dataset['X_res'].shape[0])
         vars = self.dataset.filter('_res')
-        self.dataset.subsample_firstn_astrain(nres_train, vars)
+        self.dataset.subsample_unif_astrain(nres_train, vars)
         print('downsample ', vars, ' to ', nres_train)
         ds_opts['N_res_train'] = nres_train
 
         # bc loss
         n = min(ds_opts['N_bc_train'], self.dataset['X_bc'].shape[0])
         vars = self.dataset.filter('_bc')
-        self.dataset.subsample_firstn_astrain(n, vars)
+        self.dataset.subsample_unif_astrain(n, vars)
         print('downsample ', vars, ' to ', n)
         ds_opts['N_bc_train'] = n
 

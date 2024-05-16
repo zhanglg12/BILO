@@ -259,27 +259,29 @@ class ParamFunction(nn.Module):
         self.fsiren = fsiren
 
         if activation == 'tanh':
-            activation = nn.Tanh
+            nn_activation = nn.Tanh
         elif activation == 'relu':
-            activation = nn.ReLU
+            nn_activation = nn.ReLU
         elif activation == 'sigmoid':
-            activation = nn.Sigmoid
+            nn_activation = nn.Sigmoid
         elif activation == 'id':
-            activation = nn.Identity
+            nn_activation = nn.Identity
         else:
-            raise ValueError('activation function not supported')
+            raise ValueError(f'activation {activation} not supported')
 
         if self.fsiren:
             activation = Sin
 
         if output_activation == 'softplus':
-            output_activation = nn.Softplus
+            nn_output_activation = nn.Softplus
         elif output_activation == 'id':
-            output_activation = nn.Identity
+            nn_output_activation = nn.Identity
         elif output_activation == 'relu':
-            output_activation = nn.ReLU
+            nn_output_activation = nn.ReLU
+        elif output_activation == 'sigmoid':
+            nn_output_activation = nn.Sigmoid
         else:
-            raise ValueError('output activation function not supported')
+            raise ValueError(f'output activation {output_activation} not supported')
 
 
         # Create the layers of the neural network
@@ -287,20 +289,20 @@ class ParamFunction(nn.Module):
         if fdepth == 1:
             # Only one layer followed by output_activation if fdepth is 1
             layers.append(nn.Linear(input_dim, output_dim))
-            layers.append(output_activation())
+            layers.append(nn_output_activation())
         else:
             # input layer
             layers.append(nn.Linear(input_dim, fwidth))
-            layers.append(activation())
+            layers.append(nn_activation())
 
             # hidden layers (fdepth - 2 because we already have input and output layers)
             for _ in range(fdepth - 2):
                 layers.append(nn.Linear(fwidth, fwidth))
-                layers.append(activation())
+                layers.append(nn_activation())
 
             # output layer
             layers.append(nn.Linear(fwidth, output_dim))
-            layers.append(output_activation())
+            layers.append(nn_output_activation())
 
         # Store the layers as a sequential module
         self.layers = nn.Sequential(*layers)
