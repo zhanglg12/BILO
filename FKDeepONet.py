@@ -16,9 +16,75 @@ class FKOperatorLearning(BaseOperator):
         self.input_dim = 2
         self.output_dim = 1
         self.param_dim = 2
+
+        self.D = self.dataset['D']
+        self.RHO = self.dataset['RHO']
+
         self.lambda_transform = lambda X, u: (0.5 * torch.sin(np.pi * X[:,1:2]) ** 2)+ u * X[:,1:2] * (1 - X[:,1:2]) * X[:,0:1]
         self.testcase = kwargs['testcase']
+        self.dat_use_res = kwargs['dat_use_res']
+
+        self.idmx = None
     
+    def residual(self, nn, P, X):
+
+        # X is N-by-2, N = Nx* Nt
+        X.requires_grad_(True)
+
+        # slice column of x and transpose, t and x is 1-by-N
+        t = torch.transpose(X[:, 0:1],0,1)
+        x = torch.transpose(X[:, 1:2],0,1)
+
+        rD = P[:,0:1]
+        rRHO = P[:,1:2]
+
+        # Concatenate sliced tensors to form the input for the network if necessary
+        nn_input = torch.cat((t,x), dim=0)
+        nn_input = torch.transpose(nn_input, 0, 1)
+
+        # Forward pass through the network
+        u_pred = nn(P, nn_input)
+
+        batch = u_pred.shape[0]
+        N = u_pred.shape[1]
+
+
+        
+        # Define a tensor of ones for grad_outputs
+        # v.shape = (batch, batch, N)
+        # v[i].shape = (batch, N), i-th row is all ones
+        V = torch.zeros(batch, batch, N).to('cuda')
+        # Loop to set the i-th row of each V[i] tensor to all ones
+        for i in range(batch):
+            V[i, i, :] = 1
+        
+        
+        # Compute gradients with respect to the sliced tensors
+        u_t = torch.autograd.grad(u_pred, t, grad_outputs=V, is_grads_batched=True, create_graph=True)[0]
+        u_x = torch.autograd.grad(u_pred, x, grad_outputs=V, is_grads_batched=True, create_graph=True)[0]
+        
+        # u_t and u_x has shape (batch, 1, N)
+        # squeeze dim=1 to get (batch, N)
+        u_t = torch.squeeze(u_t, 1)
+        u_x = torch.squeeze(u_x, 1)
+
+        u_xx = torch.autograd.grad(u_x, x, grad_outputs=V, is_grads_batched=True, create_graph=True)[0]
+
+        
+        # Compute the right-hand side of the PDE
+        rhs = rD * self.D * u_xx + rRHO * self.RHO * u_pred * (1 - u_pred)
+        
+        # Compute the residual
+        res = u_t - rhs
+        
+        return res, u_pred
+    
+    def residual_loss(self, nn:DeepONet, P, X):
+        # Compute the residual loss
+        res, _ = self.residual(nn, P, X)
+        return torch.mean(res**2)
+
+
     def get_metrics(self, nn:DeepONet):
         # take pde_param, tensor of trainable parameters
         # return dictionary of metrics
@@ -79,6 +145,11 @@ class FKOperatorLearning(BaseOperator):
         gt, gx, u = griddata_subsample(gt, gx, u, Nt, Nx)
         dataset['X_res_train'] = np.column_stack((gt.reshape(-1, 1), gx.reshape(-1, 1)))
         dataset['u_res_train'] = u.reshape(-1, 1)
+
+        if self.dat_use_res:
+            # use residual point for data loss
+            dataset['X_dat_train'] = dataset['X_res_train']
+            dataset['u_dat_train'] = dataset['u_res_train']
         
         # remove redundant data
         for i in range(10):
@@ -159,7 +230,7 @@ if __name__ == "__main__":
     fkoperator = FKOperatorLearning(datafile=filename)
 
     fkoperator.init(batch_size=1000)
-    fkoperator.train(max_iter=1000, print_every=100, save_every=5000)
+    fkoperator.train(max_iter=1000, print_every=100)
 
     fkoperator.save_data('pred.mat')
 

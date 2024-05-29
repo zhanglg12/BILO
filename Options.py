@@ -29,7 +29,7 @@ default_opts = {
         'trainable_param': '', # list of trainable parameters, e.g. 'D,rho'
         'init_param': '', # nn initial parameter as string, e.g. 'D,1.0'
         'datafile': '',
-        'use_res': False, # used in fkproblem and heatproblem, use res as training data
+        'dat_use_res': False, # used in fkproblem and heatproblem, use res as training data
         'testcase': 0,
         # for heat problem 0.1 and poisson problem
         'D': 0.1,

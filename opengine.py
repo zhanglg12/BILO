@@ -44,7 +44,8 @@ if opts.opts['restore'] != '':
     else:
         #  restore from exp_name:run_name
         name_str = opts.opts['restore']
-        restore_opts, restore_artifacts = load_artifact(name_str=opts.opts['restore'])
+        restore_artifacts = load_artifact(name_str=opts.opts['restore'])
+        restore_opts = read_json(restore_artifacts['options.json'])
         print(f'restore from mlflow {name_str}')
     
     # restore operator architecture
@@ -67,7 +68,7 @@ if opts.opts['traintype'] == 'inverse':
 deeponet = fkoperator.setup_network(**opts.opts['nn_opts'])
 logger = Logger(opts.opts['logger_opts'])
 
-trainer = OperatorTrainer(opts.opts['train_opts'], deeponet, fkoperator, fkoperator.dataset, 'cuda', logger)
+trainer = OperatorTrainer(opts.opts['train_opts'],opts.opts['weights'], deeponet, fkoperator, fkoperator.dataset, 'cuda', logger)
 
 if opts.opts['restore'] != '':
     trainer.restore(restore_artifacts)

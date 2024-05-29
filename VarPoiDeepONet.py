@@ -52,7 +52,9 @@ class VarPoiDeepONet(BaseOperator):
 
     def regularization_loss(self, nn:DeepONet):
         '''l2 norm of gradient of pde_param'''
+        # pad endpoint with 0
         full_d = self.pad_pde_param(nn.pde_param)
+        
         n = full_d.shape[1]
         h = 1.0 / (n - 1)
         first_deri = (full_d[0,1:] - full_d[0,:-1])/h

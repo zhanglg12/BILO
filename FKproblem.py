@@ -26,7 +26,7 @@ class FKproblem(BaseProblem):
         self.param['rRHO'] = self.dataset[f'rRHO{self.testcase}']
 
         # use residual point for data loss
-        self.use_res = kwargs['use_res']
+        self.dat_use_res = kwargs['dat_use_res']
 
         # ic, u(x) = 0.5*sin(pi*x)^2
         # bc, u(t,0) = 0, u(t,1) = 0

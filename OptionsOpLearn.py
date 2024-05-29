@@ -32,17 +32,23 @@ default_opts = {
         # dimension of parameter, for scalar, same as number of scalar parameters
         # for function, same as discretization of function
         'param_dim': 1,
+        "dat_use_res": False,
     },
     'train_opts': {
         'print_every': 20,
-        'save_every':5000,
-        'max_iter': 100000,
+        'max_iter': 10000,
         'tolerance': 1e-6, # stop if loss < tolerance
         'patience': 1000,
         'lr': 1e-3,
         'batch_size': 1000,
         'split': 0.9,
         'wreg':None,
+    },
+    'weights': {
+        'res': None,
+        'data': 1.0,
+        'l2grad':None,
+        'l1grad':None,
     },
     'dataset_opts': {
         'N_res_train': 101,

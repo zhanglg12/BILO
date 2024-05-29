@@ -12,14 +12,15 @@ from util import flatten
 
 class OperatorTrainer:
     # operator learning
-    def __init__(self, train_opts, deeponet, olprob, dataset, device, logger:Logger):
+    def __init__(self, train_opts, weights, deeponet, olprob, dataset, device, logger:Logger):
         
-        self.logger = logger
+        self.train_opts = train_opts
+        self.weights = weights # weights for loss function
         self.deeponet = deeponet
         self.olprob = olprob
         self.dataset = dataset
         self.device = device
-        self.train_opts = train_opts
+        self.logger = logger
 
         self.info = {}
         self.info['num_params'] = sum(p.numel() for p in self.deeponet.parameters())
@@ -53,7 +54,9 @@ class OperatorTrainer:
 
         if traintype == 'pretrain':
             self.dataset.to_device(self.device)
+            
             self.init_pretrain_data()
+
             self.trainable_param = self.deeponet.parameters()
 
         elif traintype == 'inverse':
@@ -67,7 +70,14 @@ class OperatorTrainer:
 
             # set pde_param to be trainable
             self.deeponet.pde_param.requires_grad = True
-            self.trainable_param = [self.deeponet.pde_param]
+
+            # if use residual loss, network parameters are also trainable
+            if self.weights['res'] is not None:
+                self.trainable_param = list(self.deeponet.parameters())
+            else:
+                self.trainable_param = [self.deeponet.pde_param]
+
+            
 
         else:
             raise ValueError('Invalid training type')
@@ -102,7 +112,9 @@ class OperatorTrainer:
         
         max_iter = self.train_opts['max_iter']
         print_every = self.train_opts['print_every']
-        save_every = self.train_opts['save_every']
+        batch_size = self.train_opts['batch_size']
+
+        train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True)
 
         # Initialize the optimizer and loss function
         self.optimizer = torch.optim.Adam(self.trainable_param, lr=1e-3)
@@ -111,42 +123,66 @@ class OperatorTrainer:
         # Start the training iterations
         step = 0
         while step < max_iter:
-            # Training mode and forward pass
-            self.deeponet.train()
-            U_pred = self.deeponet(self.train_dataset.P, self.train_dataset.X)
-            loss = self.loss_fn(U_pred, self.train_dataset.U)
+            for P_batch, U_batch in train_loader:
+                # Training mode and forward pass
+                self.deeponet.train()
+                U_pred = self.deeponet(P_batch, self.train_dataset.X)
 
-            if self.traintype == 'inverse' and self.train_opts['wreg'] is not None:
-                # Add regularization loss
-                # ad-hoc regularization loss, use for poivar only
-                regloss = self.olprob.regularization_loss(self.deeponet)
-                loss += self.train_opts['wreg'] * regloss
+                total = 0
 
-            # Logging
-            if step % print_every == 0 or step == max_iter - 1:
-                metric = {'mse': loss.item()}
+                loss_dat = self.loss_fn(U_pred, U_batch)
+                loss_dat = self.weights['data'] * loss_dat
+                metric = {'data': loss_dat.item()}
+                total += loss_dat
 
-                if self.traintype == 'pretrain':
-                    test_loss = self.evaluate()
-                    metric['testmse'] = test_loss.item()
-                else:
-                    param_metric = self.olprob.get_metrics(self.deeponet)
-                    metric.update(param_metric)
+                if self.weights['res'] is not None:
+                    # Add residual loss
+                    
+                    # ad-hoc fix
+                    if self.traintype == 'pretrain':
+                        X_res= self.OpData.X
+                    else:
+                        # might be res or dat depending of use_res option
+                        X_res= self.olprob.dataset['X_res_train']
+                    
+                    res_loss = self.olprob.residual_loss(self.deeponet, P_batch, X_res)
+                    total += self.weights['res'] * res_loss
+                    metric['res'] = res_loss.item()
 
+                if self.traintype == 'inverse' and self.weights['l2grad'] is not None:
+                    # Add regularization loss
                     # ad-hoc regularization loss, use for poivar only
-                    if self.train_opts['wreg'] is not None:
-                        metric['regloss'] = regloss.item()
+                    regloss = self.olprob.regularization_loss(self.deeponet)
+                    total += self.weights['l2grad'] * regloss
+                    metric['l2grad'] = regloss.item()
 
+                # Logging
+                if step % print_every == 0 or step == max_iter - 1:
+                    
+                    if self.traintype == 'pretrain':
+                        # for pretraining, evaluate on testing data
+                        test_loss = self.evaluate()
+                        metric['datatest'] = test_loss.item()
+                    else:
+                        # for inverse problem, evalute metrics w.r.t. exact solution
+                        param_metric = self.olprob.get_metrics(self.deeponet)
+                        metric.update(param_metric)
 
-                self.logger.log_metrics(metric, step=step)
+                        # ad-hoc regularization loss, use for poivar only
+                        if self.weights['l2grad'] is not None:
+                            metric['l2grad'] = regloss.item()
 
-            # Backpropagation
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+                    self.logger.log_metrics(metric, step=step)
 
-            # Increment the step count
-            step += 1
+                # Backpropagation
+                self.optimizer.zero_grad()
+                total.backward()
+                self.optimizer.step()
+
+                # Increment the step count
+                step += 1
+                if step >= max_iter:
+                    break
     
     def evaluate(self):
         # evaluate on testing data
