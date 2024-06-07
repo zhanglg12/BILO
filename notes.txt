@@ -1,6 +1,10 @@
 # start mlflow server
 mlflow server --host 0.0.0.0 --port 5000
 
+https://stackoverflow.com/questions/63525498/how-do-i-set-a-different-local-directory-for-mlflow
+
+mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///home/ziruz16/adjointpinn/newruns/
+
 # view process at port 5000
 lsof -n -i :5000
 

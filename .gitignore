@@ -1,4 +1,5 @@
 mlruns/
+newruns/
 *.pth
 *.png
 fig*/
@@ -12,4 +13,5 @@ __pycache__/
 torchnotes/
 torchreparam/
 bashscripts/
+Langevin-dynamics/
 
