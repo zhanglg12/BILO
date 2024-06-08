@@ -14,8 +14,6 @@ from DataSet import DataSet
 
 from DenseNet import DenseNet, ParamFunction
 
-from torchreparam import ReparamModule
-
 GLOBTEST = False
 
 class VarPoiDenseNet(DenseNet):

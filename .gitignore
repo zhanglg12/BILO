@@ -5,13 +5,10 @@ newruns/
 fig*/
 runs/
 tmp/
-minLoRA/
 dataset/
 runs/
 PyTorch_LBFGS/
 __pycache__/
 torchnotes/
-torchreparam/
 bashscripts/
-Langevin-dynamics/
 
