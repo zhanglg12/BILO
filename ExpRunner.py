@@ -245,6 +245,7 @@ class VarPoiExpRunner(ExperimentRunner):
         self.inv_exp = "poivar2_inv"
         self.inv_opt = f"l1grad None l2grad 1e-3 max_iter 10000 experiment_name {self.inv_exp}"
         self.inv_testcase = 9
+        # 9 = hat function
 
         # weights for vanilla experiments
         self.vanilla_weights = [ '1e2', '1e1', '1e0']
@@ -410,6 +411,68 @@ class fkopExpRunner(ExperimentRunner):
 
         return list(tasks.values())
 
+
+class VarPoiOpExpRunner(ExperimentRunner):
+    # variable poisson with deeponet
+    def __init__(self, dryrun=True):
+        # call the parent class constructor
+        super().__init__(dryrun)
+
+        # common setup
+        self.common = "problem varpoi param_dim 101 width 128 trunk_depth 2 branch_depth 2"
+        
+        # init setup
+        self.init_exp = "varpoiop_pretrain"
+        self.init_opt = f"experiment_name {self.init_exp} max_iter 20000"
+
+        # inverse problem setup
+        self.inv_exp = "varpoiop_inv"
+        self.inv_opt = f"experiment_name {self.inv_exp} testcase 9 datafile dataset/varpoi.mat max_iter 20000"
+        
+        self.nzopt = 'N_dat_train 51 use_noise True variance 0.0001'
+        self.seeds = [0,1,2,3,4,5]
+        # weights for regularization
+        self.l2grad = [1e-3, 1e-4, 1e-5]
+        
+    
+    def create_tasks(self):
+        # override the parent class method
+
+        # https://stackoverflow.com/questions/66932956/python-mkl-threading-layer-intel-is-incompatible-with-libgomp-so-1-library        
+        # export MKL_SERVICE_FORCE_INTEL=1
+        os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
+
+        # dataset with different length scale l = 0.1, 0.2, 0.3, 0.4 etc
+        dataset = {"l01":"dataset/dat_op_varpoi_l01.mat",
+        "l02":"dataset/dat_op_varpoi_l02.mat",
+        "l03":"dataset/dat_op_varpoi_l03.mat",
+        "l04":"dataset/dat_op_varpoi_l04.mat",
+        }
+        tasks = {}
+
+        # pretrain model
+        for key, value in dataset.items():
+            command = f"./opengine.py {self.common} {self.init_opt} run_name {key} datafile {value}"
+
+            # check if the run already exists
+            if check_run_success(self.init_exp, key):
+                command = None
+
+            tasks[key] = TaskList(command)
+        
+        for key, value in dataset.items():
+            for seed in self.seeds:
+                for w in self.l2grad:
+                    name=f"inv_{key}_l2grad{w}_sd{seed}"
+                    command = f"./opengine.py {self.common} {self.inv_opt} traintype inverse run_name {name} restore {self.init_exp}:{key} {self.nzopt} seed {seed} l2grad {w}"
+
+                    if check_run_success(self.inv_exp, name):
+                        command = None
+
+                    tasks[key].add_child(command)
+
+        return list(tasks.values())
+
 if __name__ == "__main__":
         
     parser = argparse.ArgumentParser(description='run tests.')
@@ -432,6 +495,8 @@ if __name__ == "__main__":
             experiment = fkopExpRunner(dryrun=args.dryrun)
         case "darcy":
             experiment = DarcyExpRunner(dryrun=args.dryrun)
+        case "varpoiop":
+            experiment = VarPoiOpExpRunner(dryrun=args.dryrun)
         case _:
             raise ValueError(f"Unknown test {args.test}")
     

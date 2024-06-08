@@ -42,13 +42,11 @@ default_opts = {
         'lr': 1e-3,
         'batch_size': 1000,
         'split': 0.9,
-        'wreg':None,
     },
     'weights': {
         'res': None,
         'data': 1.0,
         'l2grad':None,
-        'l1grad':None,
     },
     'dataset_opts': {
         'N_res_train': 101,
