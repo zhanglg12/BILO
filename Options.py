@@ -17,12 +17,6 @@ default_opts = {
     'flags': '', 
     'device': 'cuda',
     'seed': 0,
-    
-    'transfer_opts':{
-        'transfer_method': 'lora', # lora, freeze
-        'nlayer_train': 1, # number of layers to train
-        'rank': 4,
-    },
     'pde_opts': {
         'problem': 'simpleode',
         'exact_param': None, # used for poisson problem to define exact parameter of pde, for generating training data.
