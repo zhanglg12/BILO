@@ -6,7 +6,6 @@ fig*/
 runs/
 tmp/
 dataset/
-runs/
 PyTorch_LBFGS/
 __pycache__/
 torchnotes/
