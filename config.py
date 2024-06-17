@@ -1,10 +1,6 @@
-import os
+# Path to local data directory
+RUNS = '/home/ziruz16/bilo/runs/'
 
-# Set data type
-DTYPE='float32'
-# DEVICE='cpu' 
-
-RUNS = '/home/ziruz16/adjointpinn/runs/'
-# hostname = os.uname()[1].lower()
-
+# Path to mlflow tracking directory
+MLFLOW_TRACKING_URI = 'file:///home/ziruz16/adjointpinn/newruns'
 

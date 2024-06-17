@@ -4,6 +4,7 @@ import argparse
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import mlflow
+from config import MLFLOW_TRACKING_URI
 
 def create_experiment_if_not_exists(experiment_name):
     """
@@ -121,7 +122,6 @@ def run_task_lists_in_parallel(task_lists):
             except Exception as e:
                 print(f"An error occurred: {e}")
 
-MLFLOW_TRACKING_URI = 'file:///home/ziruz16/adjointpinn/newruns'
 
 class ExperimentRunner:
     def __init__(self, dryrun=True):
